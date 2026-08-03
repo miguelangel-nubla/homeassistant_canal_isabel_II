@@ -35,8 +35,11 @@ Componente para integrar los datos de consumo de agua del Canal de Isabel II en 
 4.  Te pedirá el `JSESSIONID`. Para sacarlo:
     1.  Entra en la [oficina virtual](https://oficinavirtual.canaldeisabelsegunda.es/) con tu navegador e inicia sesión.
     2.  Pulsa F12 para abrir la consola de desarrollador.
-    3.  Ve a la pestaña **Aplicación** > **Cookies**.
-    4.  Busca la que se llama `JSESSIONID` y copia el valor.
+    3.  Ve a la pestaña **Aplicación** > **Cookies** (o *Storage > Cookies* según el navegador).
+    4.  Busca la cookie llamada `JSESSIONID` y copia su valor.
+
+> [!WARNING]
+> **Caducidad de la sesión:** `JSESSIONID` es una cookie de sesión temporal emitida por el servidor web del Canal de Isabel II y **caduca aproximadamente cada hora** (o cuando se cierra la sesión en la web). Cuando caduque, Home Assistant te pedirá re-autenticarte introduciendo la nueva cookie.
 
 > [!NOTE]
-> Dada la web actual del Canal de Isabel II y la interfaz que utiliza, no hay forma de automatizar el proceso y obtener la cookie de otra manera. Tampoco hay API conocida, si alguien conoce una alternativa mejor o es capaz de obtener una API oficial, que me lo haga saber.
+> Dada la web actual del Canal de Isabel II y la interfaz que utiliza, actualmente se requiere este método manual. Tampoco hay API pública conocida. Si alguien conoce una alternativa mejor o es capaz de obtener una API oficial/login automático, por favor házmelo saber abriendo una issue.
