@@ -9,8 +9,7 @@
     "documentation": "https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II",
     "iot_class": "cloud_polling",
     "requirements": [
-        "beautifulsoup4>=4.12.0",
-        "requests>=2.31.0"
+        "beautifulsoup4>=4.12.0"
     ],
     "version": "2026.11.0"
 }
