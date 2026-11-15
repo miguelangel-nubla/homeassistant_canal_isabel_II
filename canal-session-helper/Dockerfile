@@ -11,9 +11,11 @@ RUN apt-get update \
     && chmod 1777 /tmp/.X11-unix
 
 COPY entrypoint.sh helper.py /app/
+COPY index.html /usr/share/novnc/index.html
 RUN chmod 755 /app/entrypoint.sh
 
-USER helper
+# Starts as root only to take ownership of /data, then drops to "helper"
+# (see entrypoint.sh). Running it with another user is fine too.
 ENV DISPLAY=:99
 VOLUME /data
 EXPOSE 6080

@@ -1,0 +1,22 @@
+---
+name: Canal de Isabel II session helper
+version: dev
+slug: canal-session-helper
+description: A browser where you log in to the Canal de Isabel II virtual office; it keeps the session and hands it to the integration
+url: https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II
+arch:
+  - aarch64
+  - amd64
+init: false
+ingress: true
+ingress_port: 6080
+panel_icon: mdi:water
+panel_title: Canal de Isabel II
+homeassistant_api: true
+options:
+  check_interval: 600
+  entry_id: ""
+schema:
+  check_interval: int(60,3600)
+  entry_id: str?
+image: ghcr.io/miguelangel-nubla/canal-session-helper

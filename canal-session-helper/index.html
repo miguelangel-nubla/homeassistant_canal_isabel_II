@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Canal de Isabel II</title>
+<script>
+  // Open the remote view with the websocket under the same path prefix as
+  // this page, so it also works behind a proxy that adds one (Home
+  // Assistant ingress).
+  var prefix = location.pathname.replace(/[^/]*$/, "");
+  location.replace(
+    prefix + "vnc.html?autoconnect=1&resize=scale&path=" +
+      encodeURIComponent(prefix.replace(/^\//, "") + "websockify")
+  );
+</script>
