@@ -21,6 +21,7 @@ Contenedor opcional que mantiene una sesión de la oficina virtual en un navegad
    | `HA_URL` | Dirección de Home Assistant vista desde el contenedor. |
    | `HA_TOKEN` | El token del paso anterior. |
    | `VNC_PASSWORD` | Contraseña de la vista remota. VNC solo usa los 8 primeros caracteres. |
+   | `HA_TOKEN_FILE`, `VNC_PASSWORD_FILE` | Opcional. Ruta de un fichero con el secreto, en lugar de la variable. |
    | `HELPER_URL` | Opcional. Enlace a la vista remota que aparecerá en la notificación. |
    | `HA_ENTRY_ID` | Opcional. Solo si tienes varias entradas de la integración. |
    | `CHECK_INTERVAL` | Opcional. Segundos entre comprobaciones (600 por defecto). |
@@ -29,8 +30,10 @@ Contenedor opcional que mantiene una sesión de la oficina virtual en un navegad
 3. Arranca el contenedor:
 
    ```sh
-   docker compose up -d --build
+   docker compose up -d
    ```
+
+   La imagen se descarga de `ghcr.io/miguelangel-nubla/canal-session-helper`. Para construirla tú mismo, cambia `image:` por `build: .` en `docker-compose.yml`.
 
 4. Abre `http://<tu-servidor>:6080/vnc.html?autoconnect=1&resize=scale`, escribe la contraseña e inicia sesión en la oficina virtual.
 

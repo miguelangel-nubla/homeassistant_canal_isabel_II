@@ -26,7 +26,10 @@ PROFILE_DIR = "/data/profile"
 NOTIFICATION_ID = "canal_de_isabel_ii_login_needed"
 
 HA_URL = os.environ["HA_URL"].rstrip("/")
-HA_TOKEN = os.environ["HA_TOKEN"]
+HA_TOKEN = os.environ.get("HA_TOKEN", "")
+if not HA_TOKEN:
+    with open(os.environ["HA_TOKEN_FILE"], encoding="utf-8") as _token_file:
+        HA_TOKEN = _token_file.read().strip()
 HA_ENTRY_ID = os.environ.get("HA_ENTRY_ID", "")
 HA_VERIFY_SSL = os.environ.get("HA_VERIFY_SSL", "true").lower() != "false"
 HELPER_URL = os.environ.get("HELPER_URL", "")

@@ -3,9 +3,16 @@
 # port 6080) and the helper that runs the browser.
 set -eu
 
-: "${VNC_PASSWORD:?Set VNC_PASSWORD: the remote view shows a logged-in browser}"
+# Each secret may be given directly or as a file (VNC_PASSWORD_FILE, HA_TOKEN_FILE).
+if [ -z "${VNC_PASSWORD:-}" ] && [ -n "${VNC_PASSWORD_FILE:-}" ]; then
+    VNC_PASSWORD="$(head -n 1 "$VNC_PASSWORD_FILE")"
+fi
+if [ -z "${HA_TOKEN:-}" ] && [ -z "${HA_TOKEN_FILE:-}" ]; then
+    echo "Set HA_TOKEN or HA_TOKEN_FILE to a Home Assistant long-lived access token" >&2
+    exit 1
+fi
+: "${VNC_PASSWORD:?Set VNC_PASSWORD or VNC_PASSWORD_FILE: the remote view shows a logged-in browser}"
 : "${HA_URL:?Set HA_URL, for example http://homeassistant.local:8123}"
-: "${HA_TOKEN:?Set HA_TOKEN to a Home Assistant long-lived access token}"
 
 SCREEN="${SCREEN_SIZE:-1280x800}"
 
