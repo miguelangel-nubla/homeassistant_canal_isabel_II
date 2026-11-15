@@ -22,6 +22,7 @@ Contenedor opcional que mantiene una sesión de la oficina virtual en un navegad
    | `HA_TOKEN` | El token del paso anterior. |
    | `VNC_PASSWORD` | Contraseña de la vista remota. VNC solo usa los 8 primeros caracteres. |
    | `HA_TOKEN_FILE`, `VNC_PASSWORD_FILE` | Opcional. Ruta de un fichero con el secreto, en lugar de la variable. |
+   | `VNC_NO_PASSWORD` | Opcional. `true` quita la contraseña de la vista remota. Solo si el puerto 6080 queda detrás de un proxy que ya autentica. |
    | `HELPER_URL` | Opcional. Enlace a la vista remota que aparecerá en la notificación. |
    | `HA_ENTRY_ID` | Opcional. Solo si tienes varias entradas de la integración. |
    | `CHECK_INTERVAL` | Opcional. Segundos entre comprobaciones (600 por defecto). |
