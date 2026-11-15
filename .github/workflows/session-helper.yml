@@ -56,9 +56,21 @@ jobs:
     needs: image
     if: github.event_name == 'release' && !github.event.release.prerelease
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
     steps:
+      # The add-on repository links to the tag "v<version>", while this
+      # repository's releases are tagged without the "v".
+      - name: Add the v-prefixed tag
+        if: ${{ !startsWith(github.event.release.tag_name, 'v') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/tags/v${{ github.event.release.tag_name }}" \
+            -f sha="${{ github.sha }}" || true
       - if: env.DISPATCH_TOKEN != ''
         run: |
           curl -fsS -X POST \
