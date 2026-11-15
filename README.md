@@ -58,6 +58,12 @@ Cada importación continúa la serie guardada, así que volver a descargar las m
 > [!IMPORTANT]
 > **Si actualizas desde una versión anterior:** el histórico ya no se guarda en el sensor `Canal de Isabel II Total`, que se elimina. Tienes que volver a elegir la fuente de agua en el panel de Energía. Las estadísticas antiguas de ese sensor se pueden borrar desde **Herramientas para desarrolladores > Estadísticas**.
 
+## Entregar la sesión sin la interfaz
+
+El servicio `canal_de_isabel_ii.set_session` recibe una cookie `JSESSIONID`, la valida, la guarda e importa los datos al momento. Sirve para que otra herramienta entregue la sesión en lugar de pegarla en el formulario de reautenticación.
+
+La carpeta [`session-helper`](session-helper/) contiene un contenedor opcional que lo usa: un navegador en tu servidor en el que inicias sesión tú, y que a partir de ahí entrega y vigila la sesión.
+
 ## Diagnóstico de la sesión
 
 La integración registra cuánto dura cada sesión: cuándo se configuró, la última comprobación correcta y el momento en que el portal la rechazó. Se puede consultar con **Descargar diagnósticos** en la página de la integración. La cookie nunca se incluye.

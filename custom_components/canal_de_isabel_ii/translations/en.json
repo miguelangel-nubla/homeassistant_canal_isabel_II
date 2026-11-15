@@ -23,5 +23,21 @@
     "abort": {
       "reauth_successful": "Session updated."
     }
+  },
+  "services": {
+    "set_session": {
+      "name": "Set session",
+      "description": "Gives the integration a new portal session and imports the data straight away. Meant for tools that obtain the session outside Home Assistant.",
+      "fields": {
+        "jsessionid": {
+          "name": "JSESSIONID cookie",
+          "description": "Value of the JSESSIONID cookie of a logged-in portal session."
+        },
+        "entry_id": {
+          "name": "Entry",
+          "description": "Which Canal de Isabel II entry to update. Only needed if there is more than one."
+        }
+      }
+    }
   }
 }

@@ -10,6 +10,8 @@ CONF_SESSION_SET_AT = "session_set_at"
 # portal's idle timeout and not hammering its website.
 KEEP_ALIVE_INTERVAL = timedelta(minutes=10)
 
+SERVICE_SET_SESSION = "set_session"
+
 SESSION_OK = "ok"
 SESSION_EXPIRED = "expired"
 SESSION_ERROR = "error"

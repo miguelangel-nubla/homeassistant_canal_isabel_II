@@ -23,5 +23,21 @@
     "abort": {
       "reauth_successful": "Sesión actualizada."
     }
+  },
+  "services": {
+    "set_session": {
+      "name": "Establecer sesión",
+      "description": "Entrega a la integración una nueva sesión del portal e importa los datos al momento. Pensado para herramientas que obtienen la sesión fuera de Home Assistant.",
+      "fields": {
+        "jsessionid": {
+          "name": "Cookie JSESSIONID",
+          "description": "Valor de la cookie JSESSIONID de una sesión iniciada en el portal."
+        },
+        "entry_id": {
+          "name": "Entrada",
+          "description": "Qué entrada de Canal de Isabel II actualizar. Solo hace falta si hay más de una."
+        }
+      }
+    }
   }
 }
