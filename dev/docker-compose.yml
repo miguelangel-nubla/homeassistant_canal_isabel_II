@@ -1,0 +1,15 @@
+# A throwaway Home Assistant for trying the integration: http://localhost:18123
+# The working copy of the integration is mounted read-only, so a restart of
+# the container picks up code changes. Its state lives in dev/config (ignored
+# by git). See dev/README.md.
+services:
+  ha-dev:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: canal-ha-dev
+    environment:
+      TZ: Europe/Madrid
+    ports:
+      - "127.0.0.1:18123:8123"
+    volumes:
+      - ./config:/config
+      - ../custom_components/canal_de_isabel_ii:/config/custom_components/canal_de_isabel_ii:ro
