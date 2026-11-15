@@ -14,7 +14,12 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 )
 
 from custom_components.canal_de_isabel_ii.api import AuthError, PortalData
-from custom_components.canal_de_isabel_ii.const import DOMAIN, SESSION_OK
+from custom_components.canal_de_isabel_ii.const import (
+    DOMAIN,
+    HISTORY_DAYS,
+    REFRESH_DAYS,
+    SESSION_OK,
+)
 from custom_components.canal_de_isabel_ii.csv_parser import Reading
 from custom_components.canal_de_isabel_ii.diagnostics import (
     async_get_config_entry_diagnostics,
@@ -57,7 +62,10 @@ class FakePortal:
     def probe(self):
         return SESSION_OK, None
 
-    def get_consumption_data(self):
+    requested_days = []
+
+    def get_consumption_data(self, days=None):
+        FakePortal.requested_days.append(days)
         if self.jsessionid not in self.valid_sessions:
             raise AuthError("Authentication failed: Redirected to login page")
         return self.data
@@ -66,6 +74,7 @@ class FakePortal:
 @pytest.fixture
 def portal():
     FakePortal.data = PortalData(readings=readings(0, [10, 20, 30]), meter=METER)
+    FakePortal.requested_days = []
     with patch("custom_components.canal_de_isabel_ii.CanalIsabelIIAPI", FakePortal):
         yield FakePortal
 
@@ -127,6 +136,35 @@ async def test_overlapping_refresh_continues_the_series(recorder_mock, hass, por
     # The meter sensor keeps its last reading when a fetch has none.
     meter = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_meter_reading")
     assert float(meter.state) == 56.735
+
+
+async def test_first_download_asks_for_the_history_then_a_short_window(recorder_mock, hass, portal):
+    entry = await setup_entry(hass)
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert portal.requested_days == [HISTORY_DAYS, REFRESH_DAYS]
+
+
+async def test_older_history_is_merged_before_existing_rows(recorder_mock, hass, portal):
+    # An install that already holds hours 2-4 and then receives hours 0-4.
+    portal.data = PortalData(readings=readings(2, [30, 40, 50]), meter=METER)
+    entry = await setup_entry(hass)
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    assert await stored_statistics(hass) == [(30.0, 30.0), (40.0, 70.0), (50.0, 120.0)]
+
+    portal.data = PortalData(readings=readings(0, [10, 20, 30, 40, 50]), meter=None)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert await stored_statistics(hass) == [
+        (10.0, 10.0),
+        (20.0, 30.0),
+        (30.0, 60.0),
+        (40.0, 100.0),
+        (50.0, 150.0),
+    ]
 
 
 async def test_old_total_entity_is_removed(recorder_mock, hass, portal):

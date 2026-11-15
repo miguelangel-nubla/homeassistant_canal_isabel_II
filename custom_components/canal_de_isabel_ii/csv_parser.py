@@ -22,8 +22,9 @@ from zoneinfo import ZoneInfo
 PORTAL_TZ = ZoneInfo("Europe/Madrid")
 
 # Whether the hour in "Fecha/Hora" names the end of the measured hour (True)
-# or its start (False). Unconfirmed: check against the portal's own chart
-# with real data before changing it.
+# or its start (False). Checked against the portal 2026-11: its daily totals
+# equal the sum of that day's labels 00 to 23 (36 days out of 36), so a label
+# belongs to the day and hour it names.
 HOUR_LABEL_IS_END = False
 
 TIME_FORMAT = "%d/%m/%Y %H"

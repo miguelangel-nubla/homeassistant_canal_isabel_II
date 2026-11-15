@@ -55,6 +55,8 @@ Para añadirlo al panel de Energía: **Ajustes > Paneles > Energía > Consumo de
 
 Cada importación continúa la serie guardada, así que volver a descargar las mismas horas no duplica ni descuadra nada.
 
+La primera descarga pide el último año completo de consumo horario; las siguientes, los últimos 30 días, de modo que las horas publicadas con retraso o una temporada sin sesión se rellenan solas.
+
 > [!IMPORTANT]
 > **Si actualizas desde una versión anterior:** el histórico ya no se guarda en el sensor `Canal de Isabel II Total`, que se elimina. Tienes que volver a elegir la fuente de agua en el panel de Energía. Las estadísticas antiguas de ese sensor se pueden borrar desde **Herramientas para desarrolladores > Estadísticas**.
 

@@ -16,10 +16,13 @@ from homeassistant.util import dt as dt_util
 
 from .api import CanalIsabelIIAPI, AuthError
 from .const import (
+    CONF_HISTORY_IMPORTED,
     CONF_JSESSIONID,
     CONF_SESSION_SET_AT,
     DOMAIN,
+    HISTORY_DAYS,
     KEEP_ALIVE_INTERVAL,
+    REFRESH_DAYS,
     SERVICE_SET_SESSION,
     SESSION_EXPIRED,
     SESSION_OK,
@@ -107,9 +110,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def async_update_data():
         """Fetch data from API."""
+        # The first download asks for the whole history the portal keeps.
+        first_import = not entry.data.get(CONF_HISTORY_IMPORTED)
+        days = HISTORY_DAYS if first_import else REFRESH_DAYS
         try:
             # Run blocking API call in executor
-            data = await hass.async_add_executor_job(api.get_consumption_data)
+            data = await hass.async_add_executor_job(api.get_consumption_data, days)
         except AuthError as err:
             await tracker.async_record_failure(str(err))
             raise ConfigEntryAuthFailed(err) from err
@@ -117,11 +123,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise UpdateFailed(f"Error communicating with API: {err}")
         tracker.record_ok()
 
+        imported = True
         for contract, hourly in hourly_totals(data.readings).items():
             try:
                 await async_import_consumption(hass, contract, hourly)
             except Exception:  # pylint: disable=broad-except
+                imported = False
                 _LOGGER.exception("Could not import statistics for contract %s", contract)
+        if first_import and imported and data.readings:
+            hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_HISTORY_IMPORTED: True}
+            )
         return data
 
     coordinator = DataUpdateCoordinator(

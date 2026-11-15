@@ -10,6 +10,15 @@ CONF_SESSION_SET_AT = "session_set_at"
 # portal's idle timeout and not hammering its website.
 KEEP_ALIVE_INTERVAL = timedelta(minutes=10)
 
+# Set once the long first download has been imported.
+CONF_HISTORY_IMPORTED = "history_imported"
+
+# Days of hourly data requested: the whole year the first time, then a
+# window wide enough to cover a long outage and readings published late.
+# The portal answers a full year in a single request (checked 2026-11).
+HISTORY_DAYS = 365
+REFRESH_DAYS = 30
+
 SERVICE_SET_SESSION = "set_session"
 
 SESSION_OK = "ok"

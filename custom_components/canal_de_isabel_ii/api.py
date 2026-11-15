@@ -2,6 +2,7 @@
 import logging
 import ssl
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from .const import (
     SESSION_EXPIRED,
     SESSION_OK,
 )
-from .csv_parser import Reading, decode_csv, parse_csv
+from .csv_parser import PORTAL_TZ, Reading, decode_csv, parse_csv
 from .meter_parser import MeterSummary, parse_meter_summary
 
 _LOGGER = logging.getLogger(__name__)
@@ -120,18 +121,21 @@ class CanalIsabelIIAPI:
             _LOGGER.warning("Auth check failed: %s", detail)
         return state == SESSION_OK
 
-    def get_consumption_data(self) -> PortalData:
+    def get_consumption_data(self, days: Optional[int] = None) -> PortalData:
         """Fetch the hourly consumption CSV and the meter summary.
+
+        days is how far back to ask, counted from today. Without it the
+        portal's own default range is used (the last day with data).
 
         Raises AuthError if the session is not accepted and PortalError for
         anything else that stops the data from being read.
         """
         try:
-            return self._fetch_consumption_data()
+            return self._fetch_consumption_data(days)
         except requests.RequestException as err:
             raise PortalError(f"Error talking to the portal: {err}") from err
 
-    def _fetch_consumption_data(self) -> PortalData:
+    def _fetch_consumption_data(self, days: Optional[int]) -> PortalData:
         # 1. Get the consumption page to find the dynamic CSV link and form data
         response = self._http.get(CONSUMPTION_URL, timeout=30, allow_redirects=True)
 
@@ -165,6 +169,19 @@ class CanalIsabelIIAPI:
 
             data[select_name] = "Horaria"
 
+            if days is not None:
+                today = datetime.now(PORTAL_TZ).date()
+                date_from = form.find("input", id="fechaDesde1")
+                date_to = form.find("input", id="fechaHasta1")
+                if date_from and date_to and date_from.get("name") and date_to.get("name"):
+                    data[date_from["name"]] = (today - timedelta(days=days)).isoformat()
+                    data[date_to["name"]] = today.isoformat()
+                else:
+                    _LOGGER.warning(
+                        "Date range fields not found on the consumption page; "
+                        "only the portal's default range will be read"
+                    )
+
             _LOGGER.debug("Switching to Hourly resolution...")
             post_response = self._http.post(form.get("action"), data=data, timeout=30)
             if post_response.status_code == 200:
@@ -174,7 +191,10 @@ class CanalIsabelIIAPI:
                 _LOGGER.error("Failed to switch resolution, status: %s", post_response.status_code)
 
         # 3. Find CSV Link
-        csv_link_tag = soup.find('a', href=lambda x: x and 'export-csv' in x)
+        # The page links the same export as CSV and as XLSX.
+        csv_link_tag = soup.find(
+            'a', href=lambda x: x and 'export-csv' in x and 'fileFormat=CSV' in x
+        ) or soup.find('a', href=lambda x: x and 'export-csv' in x)
         if not csv_link_tag:
             title = soup.title.string.strip() if soup.title and soup.title.string else "No Title"
             raise PortalError(
