@@ -4,8 +4,14 @@ import requests
 from bs4 import BeautifulSoup
 import csv
 from io import StringIO
-from typing import Dict, List, Optional
-from .const import BASE_URL, CONSUMPTION_URL
+from typing import Dict, List, Optional, Tuple
+from .const import (
+    BASE_URL,
+    CONSUMPTION_URL,
+    SESSION_ERROR,
+    SESSION_EXPIRED,
+    SESSION_OK,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,34 +33,37 @@ class CanalIsabelIIAPI:
         # Set the session cookie
         self._session.cookies.set('JSESSIONID', self._jsessionid, domain='oficinavirtual.canaldeisabelsegunda.es')
 
-    def check_auth(self) -> bool:
-        """Check if the session is valid by accessing the consumption page."""
+    def probe(self) -> Tuple[str, Optional[str]]:
+        """Check the session against the consumption page.
+
+        Returns (state, detail). SESSION_ERROR means the portal could not be
+        reached or failed, which says nothing about the session itself.
+        """
         try:
             response = self._session.get(CONSUMPTION_URL, timeout=30, allow_redirects=False)
-            # If 302 redirect to login, it means auth failed. 
-            # If 200 and we are on the page, success.
-            if response.status_code == 200 and "export-csv" in response.text:
-                return True
-            if response.status_code in (302, 401, 403):
-                return False
-            # Check for login form or similar in content if 200 OK but wrong page
-            if "login" in response.url or "inicio" in response.url:
-                return False
-                
-            _LOGGER.warning("Auth check failed. Status: %s. Content preview: %s", response.status_code, response.text[:200])
-            return False
-        except Exception as e:
-            _LOGGER.error("Error checking auth: %s", e)
-            return False
+        except requests.RequestException as err:
+            return SESSION_ERROR, f"network error: {err}"
 
-    def keep_alive(self) -> bool:
-        """Ping the server to keep the session alive."""
-        try:
-            _LOGGER.debug("Sending keep-alive ping...")
-            return self.check_auth()
-        except Exception as e:
-            _LOGGER.error("Error sending keep-alive ping: %s", e)
-            return False
+        if response.status_code == 200 and "export-csv" in response.text:
+            return SESSION_OK, None
+        if response.status_code >= 500:
+            return SESSION_ERROR, f"HTTP {response.status_code}"
+
+        detail = f"HTTP {response.status_code}"
+        # Drop the query and any ;jsessionid suffix: only the path is useful.
+        location = response.headers.get("Location", "").split("?")[0].split(";")[0]
+        if location:
+            detail += f" -> {location}"
+        elif response.status_code == 200:
+            detail += " without the CSV export link"
+        return SESSION_EXPIRED, detail
+
+    def check_auth(self) -> bool:
+        """Check if the session is valid."""
+        state, detail = self.probe()
+        if state != SESSION_OK:
+            _LOGGER.warning("Auth check failed: %s", detail)
+        return state == SESSION_OK
 
     def get_consumption_data(self) -> List[Dict]:
         """Fetch and parse consumption CSV data."""

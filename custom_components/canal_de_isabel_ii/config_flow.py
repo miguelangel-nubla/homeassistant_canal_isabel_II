@@ -10,7 +10,9 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .api import CanalIsabelIIAPI
-from .const import CONF_JSESSIONID, DOMAIN
+from homeassistant.util import dt as dt_util
+
+from .const import CONF_JSESSIONID, CONF_SESSION_SET_AT, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +54,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                return self.async_create_entry(title=info["title"], data=user_input)
+                return self.async_create_entry(
+                    title=info["title"],
+                    data={**user_input, CONF_SESSION_SET_AT: dt_util.utcnow().isoformat()},
+                )
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
@@ -76,7 +81,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 
                 # Update the existing entry
                 self.hass.config_entries.async_update_entry(
-                    self.entry, data=user_input
+                    self.entry,
+                    data={**user_input, CONF_SESSION_SET_AT: dt_util.utcnow().isoformat()},
                 )
                 
                 # Reload the entry to apply changes
