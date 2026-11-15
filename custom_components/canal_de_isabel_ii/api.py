@@ -1,8 +1,14 @@
 """API Client for Canal de Isabel II."""
 import logging
+import ssl
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+
 import requests
 from bs4 import BeautifulSoup
-from dataclasses import dataclass
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
 from typing import List, Optional, Tuple
 from .const import (
     BASE_URL,
@@ -15,6 +21,30 @@ from .csv_parser import Reading, decode_csv, parse_csv
 from .meter_parser import MeterSummary, parse_meter_summary
 
 _LOGGER = logging.getLogger(__name__)
+
+# The portal's server sends its own certificate without the intermediate one
+# that links it to a trusted root. Browsers fetch the missing piece on their
+# own; Python does not, so the intermediate certificates are shipped here.
+# They are only added as extra links in the chain: the chain must still end
+# in a root that the system already trusts.
+_CERTS_DIR = Path(__file__).parent / "certs"
+
+
+@lru_cache(maxsize=1)
+def _ssl_context() -> ssl.SSLContext:
+    context = create_urllib3_context()
+    for cert in sorted(_CERTS_DIR.glob("*.pem")):
+        context.load_verify_locations(cafile=str(cert))
+    return context
+
+
+class _PortalAdapter(HTTPAdapter):
+    """HTTPS adapter that knows the portal's intermediate certificates."""
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["ssl_context"] = _ssl_context()
+        return super().init_poolmanager(*args, **kwargs)
+
 
 class PortalError(Exception):
     """The portal could not be read."""
@@ -38,12 +68,25 @@ class CanalIsabelIIAPI:
         """Initialize the API client."""
         self._jsessionid = jsessionid
         self._session = requests.Session()
+        self._adapter_mounted = False
         self._session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
         })
         # Set the session cookie
         self._session.cookies.set('JSESSIONID', self._jsessionid, domain='oficinavirtual.canaldeisabelsegunda.es')
+
+    @property
+    def _http(self) -> requests.Session:
+        """The session, with the HTTPS adapter mounted on first use.
+
+        Mounting reads certificate files, so it must not happen in __init__,
+        which Home Assistant calls from the event loop.
+        """
+        if not self._adapter_mounted:
+            self._session.mount(BASE_URL, _PortalAdapter())
+            self._adapter_mounted = True
+        return self._session
 
     def probe(self) -> Tuple[str, Optional[str]]:
         """Check the session against the consumption page.
@@ -52,7 +95,7 @@ class CanalIsabelIIAPI:
         reached or failed, which says nothing about the session itself.
         """
         try:
-            response = self._session.get(CONSUMPTION_URL, timeout=30, allow_redirects=False)
+            response = self._http.get(CONSUMPTION_URL, timeout=30, allow_redirects=False)
         except requests.RequestException as err:
             return SESSION_ERROR, f"network error: {err}"
 
@@ -90,7 +133,7 @@ class CanalIsabelIIAPI:
 
     def _fetch_consumption_data(self) -> PortalData:
         # 1. Get the consumption page to find the dynamic CSV link and form data
-        response = self._session.get(CONSUMPTION_URL, timeout=30, allow_redirects=True)
+        response = self._http.get(CONSUMPTION_URL, timeout=30, allow_redirects=True)
 
         if response.status_code in (401, 403):
             raise AuthError(f"Authentication failed: Status {response.status_code}")
@@ -123,7 +166,7 @@ class CanalIsabelIIAPI:
             data[select_name] = "Horaria"
 
             _LOGGER.debug("Switching to Hourly resolution...")
-            post_response = self._session.post(form.get("action"), data=data, timeout=30)
+            post_response = self._http.post(form.get("action"), data=data, timeout=30)
             if post_response.status_code == 200:
                 page_html = post_response.text
                 soup = BeautifulSoup(page_html, 'html.parser')
@@ -144,7 +187,7 @@ class CanalIsabelIIAPI:
             csv_url = BASE_URL + csv_url
 
         # 4. Download and parse the CSV
-        csv_response = self._session.get(csv_url, timeout=60)
+        csv_response = self._http.get(csv_url, timeout=60)
         csv_response.raise_for_status()
         readings = parse_csv(decode_csv(csv_response.content))
         _LOGGER.debug("Downloaded %s hourly readings", len(readings))
