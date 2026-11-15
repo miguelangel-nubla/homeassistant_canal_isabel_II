@@ -87,6 +87,9 @@ async def async_setup_entry(
 class _ContractSensor(CoordinatorEntity, SensorEntity):
     """Base for the sensors of one contract."""
 
+    # The device carries the contract, so entity names stay short.
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
         super().__init__(coordinator)
         self._contract_id = contract_id
@@ -102,7 +105,7 @@ class CanalIsabelIIConsumptionSensor(_ContractSensor):
 
     def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
         super().__init__(coordinator, contract_id)
-        self._attr_name = f"Canal de Isabel II Consumption {contract_id}"
+        self._attr_name = "Consumption"
         self._attr_unique_id = f"canal_ii_consumption_{contract_id}"
         self._attr_native_unit_of_measurement = UnitOfVolume.LITERS
         self._attr_device_class = SensorDeviceClass.VOLUME
@@ -140,7 +143,7 @@ class CanalIsabelIIMeterReadingSensor(_ContractSensor):
 
     def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
         super().__init__(coordinator, contract_id)
-        self._attr_name = f"Canal de Isabel II Meter reading {contract_id}"
+        self._attr_name = "Meter reading"
         self._attr_unique_id = f"canal_ii_meter_{contract_id}"
         self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
         self._attr_device_class = SensorDeviceClass.WATER

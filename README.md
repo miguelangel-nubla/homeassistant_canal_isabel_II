@@ -48,8 +48,8 @@ Por cada contrato se crean:
 | Qué | Identificador | Para qué |
 |-----|---------------|----------|
 | Estadística horaria | `canal_de_isabel_ii:consumption_<contrato>` | Histórico de consumo en litros. Es la que se añade al panel de Energía. |
-| Sensor de último consumo | `sensor.canal_de_isabel_ii_consumption_<contrato>` | Litros de la última hora publicada por el Canal. |
-| Sensor de lectura del contador | `sensor.canal_de_isabel_ii_meter_reading_<contrato>` | Lectura absoluta en m³, la cifra que aparece en la factura. |
+| Sensor de último consumo | `sensor.canal_de_isabel_ii_<contrato>_consumption` (en instalaciones anteriores conserva su identificador) | Litros de la última hora publicada por el Canal. |
+| Sensor de lectura del contador | `sensor.canal_de_isabel_ii_<contrato>_meter_reading` | Lectura absoluta en m³, la cifra que aparece en la factura. |
 
 Para añadirlo al panel de Energía: **Ajustes > Paneles > Energía > Consumo de agua > Añadir fuente de agua** y elige la estadística **Canal de Isabel II `<contrato>`**.
 
