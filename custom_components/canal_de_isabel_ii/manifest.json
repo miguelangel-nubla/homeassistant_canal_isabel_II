@@ -3,7 +3,9 @@
     "name": "Canal de Isabel II",
     "codeowners": [],
     "config_flow": true,
-    "dependencies": [],
+    "dependencies": [
+        "recorder"
+    ],
     "documentation": "https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II",
     "iot_class": "cloud_polling",
     "requirements": [

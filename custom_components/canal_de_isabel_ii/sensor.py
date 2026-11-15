@@ -1,4 +1,8 @@
-"""Sensor platform for Canal de Isabel II."""
+"""Sensor platform for Canal de Isabel II.
+
+The hourly history lives in an external statistic (see statistics.py), which
+is what the Energy panel uses. The entities here only show the latest values.
+"""
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -10,24 +14,45 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfVolume
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
 
-from .const import DOMAIN
+from .api import PortalData
+from .const import DEFAULT_NAME, DOMAIN
+from .csv_parser import Reading
+from .meter_parser import MeterSummary
+from .statistics import consumption_statistic_id
 
 _LOGGER = logging.getLogger(__name__)
 
-from homeassistant.components.recorder.models import StatisticData, StatisticMetaData, StatisticMeanType
-from homeassistant.util.unit_conversion import VolumeConverter
-from homeassistant.components.recorder.statistics import (
-    async_import_statistics,
-    get_last_statistics,
-)
-from homeassistant.components.recorder import get_instance
-from homeassistant.util import dt as dt_util
+
+def _readings_for(data: Optional[PortalData], contract_id: str) -> List[Reading]:
+    if data is None:
+        return []
+    return [reading for reading in data.readings if reading.contract == contract_id]
+
+
+def _meter_for(data: Optional[PortalData], contract_id: str) -> Optional[MeterSummary]:
+    """Return the page's meter summary if it belongs to this contract.
+
+    The page shows the summary of one contract only. It is matched by meter
+    number, or taken as-is when the CSV holds a single contract.
+    """
+    if data is None or data.meter is None:
+        return None
+    contracts = {reading.contract for reading in data.readings}
+    meters = {reading.meter for reading in _readings_for(data, contract_id)}
+    if data.meter.meter and data.meter.meter in meters:
+        return data.meter
+    if contracts == {contract_id}:
+        return data.meter
+    return None
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -35,303 +60,112 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the sensor platform."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator = data["coordinator"]
-    
-    if not coordinator.data:
-        _LOGGER.warning("No data received from Canal de Isabel II, cannot create sensors yet.")
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    data: Optional[PortalData] = coordinator.data
+
+    contracts = sorted({reading.contract for reading in data.readings}) if data else []
+    if not contracts:
+        _LOGGER.warning("No readings received from Canal de Isabel II, cannot create sensors yet.")
         return
 
-    contracts = {}
-    for row in coordinator.data:
-        contract_id = row.get("Contrato")
-        if contract_id and contract_id not in contracts:
-            contracts[contract_id] = row
+    registry = er.async_get(hass)
+    entities: List[SensorEntity] = []
+    for contract_id in contracts:
+        # The old "Total" entity only existed to carry statistics, which now
+        # live in the external statistic.
+        old_total = registry.async_get_entity_id("sensor", DOMAIN, f"canal_ii_total_{contract_id}")
+        if old_total:
+            registry.async_remove(old_total)
 
-    entities = []
-    for contract_id, row_data in contracts.items():
-        entities.append(CanalIsabelIIConsumptionSensor(coordinator, contract_id, row_data))
-        entities.append(CanalIsabelIITotalConsumptionSensor(hass, coordinator, contract_id, row_data))
+        entities.append(CanalIsabelIIConsumptionSensor(coordinator, contract_id))
+        if _meter_for(data, contract_id) is not None:
+            entities.append(CanalIsabelIIMeterReadingSensor(coordinator, contract_id))
 
     async_add_entities(entities)
 
 
-class CanalIsabelIIConsumptionSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Canal de Isabel II Daily Consumption Sensor."""
-    
-    def __init__(
-        self,
-        coordinator: DataUpdateCoordinator,
-        contract_id: str,
-        initial_data: Dict[str, Any],
-    ) -> None:
-        """Initialize the sensor."""
+class _ContractSensor(CoordinatorEntity, SensorEntity):
+    """Base for the sensors of one contract."""
+
+    def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
         super().__init__(coordinator)
         self._contract_id = contract_id
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, contract_id)},
+            name=f"{DEFAULT_NAME} {contract_id}",
+            manufacturer=DEFAULT_NAME,
+        )
+
+
+class CanalIsabelIIConsumptionSensor(_ContractSensor):
+    """Liters used in the most recent hour published by the portal."""
+
+    def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
+        super().__init__(coordinator, contract_id)
         self._attr_name = f"Canal de Isabel II Consumption {contract_id}"
         self._attr_unique_id = f"canal_ii_consumption_{contract_id}"
         self._attr_native_unit_of_measurement = UnitOfVolume.LITERS
         self._attr_device_class = SensorDeviceClass.VOLUME
-        self._attr_state_class = SensorStateClass.TOTAL
+        # No state class: the hourly history is written as an external
+        # statistic, so Home Assistant must not build its own from this state.
         self._attr_icon = "mdi:water"
+
+    def _latest(self) -> Optional[Reading]:
+        readings = _readings_for(self.coordinator.data, self._contract_id)
+        return max(readings, key=lambda reading: reading.start) if readings else None
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return the state of the sensor (latest daily consumption)."""
-        return None
+        latest = self._latest()
+        return latest.liters if latest else None
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return the state attributes."""
-        latest_row = self._get_latest_row()
-        if latest_row:
-            return {
-                "reading_date": latest_row.get("Fecha/Hora"),
-                "period": latest_row.get("Periodo"),
-                "meter_id": latest_row.get("Contador"),
-                "address": latest_row.get("Dirección"),
-                "frequency": latest_row.get("Frecuencia"),
-            }
-        return {}
-    async def async_added_to_hass(self) -> None:
-        """When entity is added to hass."""
-        await super().async_added_to_hass()
-        self._handle_coordinator_update()
-
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        # Process historical statistics in the background
-        self.hass.async_create_task(self._import_historical_statistics())
-        super()._handle_coordinator_update()
-
-    async def _import_historical_statistics(self) -> None:
-        """Import historical statistics from CSV."""
-        from homeassistant.components.recorder.statistics import (
-            async_import_statistics,
-            statistics_during_period,
-        )
-        from datetime import datetime
-        
-        rows = self._get_sorted_rows()
-        if not rows:
-            return
-
-        statistic_id = self.entity_id
-        
-        # Prepare valid rows first
-        valid_rows = []
-        timestamps = []
-        for row in rows:
-            try:
-                date_str = row.get("Fecha/Hora")
-                dt_val = datetime.strptime(date_str, "%d/%m/%Y %H")
-                dt_utc = dt_val.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE).astimezone(dt_util.UTC)
-                val = float(row.get("Consumo (litros)", 0))
-                valid_rows.append((dt_utc, val))
-                timestamps.append(dt_utc)
-            except ValueError:
-                continue
-
-        if not valid_rows:
-            return
-
-        start_time = timestamps[0]
-        end_time = timestamps[-1] 
-        
-        existing_stats = await get_instance(self.hass).async_add_executor_job(
-            statistics_during_period,
-            self.hass,
-            start_time,
-            end_time,
-            [statistic_id],
-            "hour",
-            None,
-            {"state"},
-        )
-        
-        existing_timestamps = set()
-        if existing_stats and statistic_id in existing_stats:
-            for stat in existing_stats[statistic_id]:
-                t = stat.get("start")
-                if t:
-                    if isinstance(t, (float, int)):
-                         existing_timestamps.add(dt_util.utc_from_timestamp(t))
-                    else:
-                         existing_timestamps.add(dt_util.as_utc(t))
-
-        metadata = StatisticMetaData(
-            has_sum=False,
-            name=self.name,
-            source='recorder',
-            statistic_id=statistic_id,
-            unit_of_measurement=UnitOfVolume.LITERS,
-            mean_type=StatisticMeanType.NONE,
-            unit_class=VolumeConverter.UNIT_CLASS,
-        )
-
-        statistics = []
-        
-        for dt_utc, val in valid_rows:
-            # If we already have a stat for this timestamp, skip
-            if dt_utc in existing_timestamps:
-                continue
-                
-            statistics.append(
-                StatisticData(
-                    start=dt_utc,
-                    state=val,
-                )
-            )
-
-        if statistics:
-             _LOGGER.debug(f"Importing {len(statistics)} new historical stats for {statistic_id}")
-             await get_instance(self.hass).async_add_executor_job(async_import_statistics, self.hass, metadata, statistics)
-
-    def _get_sorted_rows(self) -> List[Dict[str, Any]]:
-        """Get rows sorted by date ascending."""
-        rows = [row for row in self.coordinator.data if row.get("Contrato") == self._contract_id]
-        from datetime import datetime
-        def parse_date(row):
-            date_str = row.get("Fecha/Hora", "")
-            try:
-                return datetime.strptime(date_str, "%d/%m/%Y %H")
-            except ValueError:
-                return datetime.min
-        
-        # Filter invalid dates
-        valid_rows = [r for r in rows if parse_date(r) != datetime.min]
-        valid_rows.sort(key=parse_date)
-        return valid_rows
-
-    def _get_latest_row(self) -> Optional[Dict[str, Any]]:
-        """Find the latest data row for this contract."""
-        rows = [row for row in self.coordinator.data if row.get("Contrato") == self._contract_id]
-        if not rows:
-            return None
-        
-        from datetime import datetime
-        def parse_date(row):
-            date_str = row.get("Fecha/Hora", "")
-            try:
-                # Try hourly format strictly
-                return datetime.strptime(date_str, "%d/%m/%Y %H")
-            except ValueError:
-                return datetime.min
-
-        rows.sort(key=parse_date, reverse=True)
-        return rows[0] if rows else None
+        latest = self._latest()
+        if latest is None:
+            return {}
+        return {
+            "reading_date": latest.label,
+            "reading_start": latest.start.isoformat(),
+            "period": latest.period,
+            "meter_id": latest.meter,
+            "address": latest.address,
+            "frequency": latest.frequency,
+            "statistic_id": consumption_statistic_id(self._contract_id),
+        }
 
 
-class CanalIsabelIITotalConsumptionSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Canal de Isabel II Total Consumption Sensor (for Energy Dashboard)."""
+class CanalIsabelIIMeterReadingSensor(_ContractSensor):
+    """Absolute reading of the physical meter, the figure used on the bill."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        coordinator: DataUpdateCoordinator,
-        contract_id: str,
-        initial_data: Dict[str, Any],
-    ) -> None:
-        """Initialize the sensor."""
-        super().__init__(coordinator)
-        self.hass = hass
-        self._contract_id = contract_id
-        self._attr_name = f"Canal de Isabel II Total {contract_id}"
-        self._attr_unique_id = f"canal_ii_total_{contract_id}"
-        self._attr_native_unit_of_measurement = UnitOfVolume.LITERS
+    def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
+        super().__init__(coordinator, contract_id)
+        self._attr_name = f"Canal de Isabel II Meter reading {contract_id}"
+        self._attr_unique_id = f"canal_ii_meter_{contract_id}"
+        self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
         self._attr_device_class = SensorDeviceClass.WATER
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_icon = "mdi:water-pump"
-        
-    async def async_added_to_hass(self) -> None:
-        """When entity is added to hass."""
-        await super().async_added_to_hass()
-        # Now self.entity_id is available
-        self._handle_coordinator_update()
+        self._attr_icon = "mdi:counter"
+        self._summary: Optional[MeterSummary] = _meter_for(coordinator.data, contract_id)
 
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.hass.async_create_task(self._import_historical_statistics())
+        # Keep the last known reading when a fetch comes back without one.
+        summary = _meter_for(self.coordinator.data, self._contract_id)
+        if summary is not None:
+            self._summary = summary
         super()._handle_coordinator_update()
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return the Cumulative Total."""
-        return None
+        return self._summary.reading_m3 if self._summary else None
 
-    def _get_sorted_rows(self) -> List[Dict[str, Any]]:
-        """Get rows sorted by date ascending."""
-        rows = [row for row in self.coordinator.data if row.get("Contrato") == self._contract_id]
-        from datetime import datetime
-        def parse_date(row):
-            date_str = row.get("Fecha/Hora", "")
-            try:
-                return datetime.strptime(date_str, "%d/%m/%Y %H")
-            except ValueError:
-                return datetime.min
-        
-        # Filter invalid dates
-        valid_rows = [r for r in rows if parse_date(r) != datetime.min]
-        valid_rows.sort(key=parse_date)
-        return valid_rows
-
-    async def _import_historical_statistics(self) -> None:
-        """Import historical statistics from CSV."""
-        rows = self._get_sorted_rows()
-        if not rows:
-            _LOGGER.debug(f"No rows available for historical import for {self.entity_id}")
-            return
-
-        # MUST use the entity_id as the statistic_id for source='recorder'
-        statistic_id = self.entity_id
-        
-        _LOGGER.debug(f"Starting historical import for {statistic_id}. Total rows: {len(rows)}")
-
-        metadata = StatisticMetaData(
-            has_sum=True,
-            name=self.name,
-            source='recorder',
-            statistic_id=statistic_id,
-            unit_of_measurement=UnitOfVolume.LITERS,
-            mean_type=StatisticMeanType.NONE,
-            unit_class=VolumeConverter.UNIT_CLASS,
-        )
-
-        statistics = []
-        running_sum = 0.0
-        
-        from datetime import datetime
-        from homeassistant.util import dt as dt_util
-        
-        for row in rows:
-            try:
-                date_str = row.get("Fecha/Hora")
-                try:
-                    dt_val = datetime.strptime(date_str, "%d/%m/%Y %H")
-                    # For hourly data, the timestamp is the hour start or end. 
-                    # Usually "00" mean 00:00. We can use it as is (aware or utc)
-                    # Use UTC for storage
-                    dt_utc = dt_val.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE).astimezone(dt_util.UTC)
-                except ValueError:
-                     _LOGGER.warning(f"Skipping row with invalid hourly date: {date_str}")
-                     continue
-
-                daily_val = float(row.get("Consumo (litros)", 0))
-                running_sum += daily_val
-                
-                statistics.append(
-                    StatisticData(
-                        start=dt_utc,
-                        state=running_sum,
-                        sum=running_sum,
-                    )
-                )
-            except ValueError as e:
-                _LOGGER.error(f"Error parsing row for statistics: {row}. Error: {e}")
-                continue
-
-        if statistics:
-            _LOGGER.debug(f"Importing {len(statistics)} statistics for {statistic_id}. Last stat: {statistics[-1]}")
-            await get_instance(self.hass).async_add_executor_job(async_import_statistics, self.hass, metadata, statistics)
-        else:
-             _LOGGER.debug("No valid statistics generated despite having rows.")
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        if self._summary is None:
+            return {}
+        return {
+            "reading_at": self._summary.read_at.isoformat() if self._summary.read_at else None,
+            "raw_reading": self._summary.raw,
+            "meter_id": self._summary.meter,
+            "address": self._summary.address,
+        }

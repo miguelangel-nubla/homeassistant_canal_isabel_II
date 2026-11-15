@@ -18,7 +18,9 @@ from .const import (
     SESSION_EXPIRED,
     SESSION_OK,
 )
+from .csv_parser import hourly_totals
 from .session_log import SessionTracker, session_store
+from .statistics import async_import_consumption
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,8 +51,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise ConfigEntryAuthFailed(err) from err
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
-        if data:
-            tracker.record_ok()
+        tracker.record_ok()
+
+        for contract, hourly in hourly_totals(data.readings).items():
+            try:
+                await async_import_consumption(hass, contract, hourly)
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Could not import statistics for contract %s", contract)
         return data
 
     coordinator = DataUpdateCoordinator(
