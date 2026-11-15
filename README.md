@@ -4,9 +4,9 @@ Componente para integrar los datos de consumo de agua del Canal de Isabel II en 
 
 ## Características
 
--   Descarga el consumo de agua.
--   Crea sensores con el consumo reciente.
--   Importa el histórico de datos.
+-   Descarga el consumo horario de agua.
+-   Importa el histórico como estadística de Home Assistant, lista para el panel de Energía.
+-   Crea sensores con el último consumo horario y la lectura del contador.
 
 ## Instalación
 
@@ -40,6 +40,35 @@ Componente para integrar los datos de consumo de agua del Canal de Isabel II en 
 
 > [!WARNING]
 > **Caducidad de la sesión:** `JSESSIONID` es una cookie de sesión temporal emitida por el servidor web del Canal de Isabel II y **caduca aproximadamente cada hora** (o cuando se cierra la sesión en la web). Cuando caduque, Home Assistant te pedirá re-autenticarte introduciendo la nueva cookie.
+
+## Datos y panel de Energía
+
+Por cada contrato se crean:
+
+| Qué | Identificador | Para qué |
+|-----|---------------|----------|
+| Estadística horaria | `canal_de_isabel_ii:consumption_<contrato>` | Histórico de consumo en litros. Es la que se añade al panel de Energía. |
+| Sensor de último consumo | `sensor.canal_de_isabel_ii_<contrato>_consumption` (en instalaciones anteriores conserva su identificador) | Litros de la última hora publicada por el Canal. |
+| Sensor de lectura del contador | `sensor.canal_de_isabel_ii_<contrato>_meter_reading` | Lectura absoluta en m³, la cifra que aparece en la factura. |
+
+Para añadirlo al panel de Energía: **Ajustes > Paneles > Energía > Consumo de agua > Añadir fuente de agua** y elige la estadística **Canal de Isabel II `<contrato>`**.
+
+Cada importación continúa la serie guardada, así que volver a descargar las mismas horas no duplica ni descuadra nada.
+
+La primera descarga pide el último año completo de consumo horario; las siguientes, los últimos 30 días, de modo que las horas publicadas con retraso o una temporada sin sesión se rellenan solas.
+
+> [!IMPORTANT]
+> **Si actualizas desde una versión anterior:** el histórico ya no se guarda en el sensor `Canal de Isabel II Total`, que se elimina. Tienes que volver a elegir la fuente de agua en el panel de Energía. Las estadísticas antiguas de ese sensor se pueden borrar desde **Herramientas para desarrolladores > Estadísticas**.
+
+## Entregar la sesión sin la interfaz
+
+El servicio `canal_de_isabel_ii.set_session` recibe una cookie `JSESSIONID`, la valida, la guarda e importa los datos al momento. Sirve para que otra herramienta entregue la sesión en lugar de pegarla en el formulario de reautenticación.
+
+La carpeta [`session-helper`](session-helper/) contiene un contenedor opcional que lo usa: un navegador en tu servidor en el que inicias sesión tú, y que a partir de ahí entrega y vigila la sesión.
+
+## Diagnóstico de la sesión
+
+La integración registra cuánto dura cada sesión: cuándo se configuró, la última comprobación correcta y el momento en que el portal la rechazó. Se puede consultar con **Descargar diagnósticos** en la página de la integración. La cookie nunca se incluye.
 
 > [!NOTE]
 > Dada la web actual del Canal de Isabel II y la interfaz que utiliza, actualmente se requiere este método manual. Tampoco hay API pública conocida. Si alguien conoce una alternativa mejor o es capaz de obtener una API oficial/login automático, por favor házmelo saber abriendo una issue.

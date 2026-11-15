@@ -1,0 +1,11 @@
+set_session:
+  fields:
+    jsessionid:
+      required: true
+      selector:
+        text:
+    entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: canal_de_isabel_ii

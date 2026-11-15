@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Canal de Isabel II",
+        "description": "Inicia sesión en la oficina virtual desde tu navegador y pega el valor de la cookie JSESSIONID.",
+        "data": {
+          "jsessionid": "Cookie JSESSIONID"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sesión caducada",
+        "description": "La sesión de {account} ya no es válida. Vuelve a iniciar sesión en la oficina virtual y pega la nueva cookie JSESSIONID.",
+        "data": {
+          "jsessionid": "Cookie JSESSIONID"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "El portal no ha aceptado esta sesión. Comprueba el valor de la cookie y que sigues con la sesión iniciada.",
+      "unknown": "Error inesperado. Revisa los registros."
+    },
+    "abort": {
+      "reauth_successful": "Sesión actualizada."
+    }
+  },
+  "services": {
+    "set_session": {
+      "name": "Establecer sesión",
+      "description": "Entrega a la integración una nueva sesión del portal e importa los datos al momento. Pensado para herramientas que obtienen la sesión fuera de Home Assistant.",
+      "fields": {
+        "jsessionid": {
+          "name": "Cookie JSESSIONID",
+          "description": "Valor de la cookie JSESSIONID de una sesión iniciada en el portal."
+        },
+        "entry_id": {
+          "name": "Entrada",
+          "description": "Qué entrada de Canal de Isabel II actualizar. Solo hace falta si hay más de una."
+        }
+      }
+    }
+  }
+}
