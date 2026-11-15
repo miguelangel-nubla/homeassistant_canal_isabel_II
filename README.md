@@ -64,7 +64,7 @@ La primera descarga pide el último año completo de consumo horario; las siguie
 
 El servicio `canal_de_isabel_ii.set_session` recibe una cookie `JSESSIONID`, la valida, la guarda e importa los datos al momento. Sirve para que otra herramienta entregue la sesión en lugar de pegarla en el formulario de reautenticación.
 
-La carpeta [`session-helper`](session-helper/) contiene un contenedor opcional que lo usa: un navegador en tu servidor en el que inicias sesión tú, y que a partir de ahí entrega y vigila la sesión.
+La carpeta [`canal-session-helper`](canal-session-helper/) contiene un contenedor opcional que lo usa: un navegador en tu servidor en el que inicias sesión tú, y que a partir de ahí entrega y vigila la sesión. También se puede instalar como complemento (add-on) de Home Assistant.
 
 ## Diagnóstico de la sesión
 

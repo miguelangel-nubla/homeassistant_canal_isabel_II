@@ -11,7 +11,17 @@ Contenedor opcional que mantiene una sesión de la oficina virtual en un navegad
 3. Cada 10 minutos recarga la página de consumo para comprobar que la sesión sigue viva.
 4. Cuando el portal cierra la sesión, crea una notificación en Home Assistant con el enlace al navegador para que vuelvas a entrar.
 
-## Puesta en marcha
+## Como complemento de Home Assistant
+
+Si usas Home Assistant OS o Supervised, la misma imagen funciona como complemento (add-on), sin token ni contraseña que configurar:
+
+1. Añade el repositorio `https://github.com/miguelangel-nubla/hassio-repository` en **Ajustes > Complementos > Tienda de complementos > Repositorios**.
+2. Instala **Canal de Isabel II session helper**, inícialo y abre su interfaz web.
+3. Inicia sesión en la oficina virtual.
+
+El acceso pasa por Home Assistant (ingress), así que no se publica ningún puerto. La documentación del complemento está en [`DOCS.md`](DOCS.md).
+
+## Puesta en marcha con Docker
 
 1. En Home Assistant, crea un **token de acceso de larga duración** (tu perfil > Seguridad) con un usuario administrador.
 2. Edita `docker-compose.yml`:
@@ -36,7 +46,7 @@ Contenedor opcional que mantiene una sesión de la oficina virtual en un navegad
 
    La imagen se descarga de `ghcr.io/miguelangel-nubla/canal-session-helper`. Para construirla tú mismo, cambia `image:` por `build: .` en `docker-compose.yml`.
 
-4. Abre `http://<tu-servidor>:6080/vnc.html?autoconnect=1&resize=scale`, escribe la contraseña e inicia sesión en la oficina virtual.
+4. Abre `http://<tu-servidor>:6080/`, escribe la contraseña e inicia sesión en la oficina virtual.
 
 La integración tiene que estar ya añadida en Home Assistant. Si todavía no lo está, añádela una vez con la cookie copiada a mano.
 

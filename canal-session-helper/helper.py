@@ -33,6 +33,7 @@ if not HA_TOKEN:
 HA_ENTRY_ID = os.environ.get("HA_ENTRY_ID", "")
 HA_VERIFY_SSL = os.environ.get("HA_VERIFY_SSL", "true").lower() != "false"
 HELPER_URL = os.environ.get("HELPER_URL", "")
+SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "600"))
 SCREEN_SIZE = os.environ.get("SCREEN_SIZE", "1280x800").replace("x", ",")
 LOGIN_POLL = 5
@@ -48,6 +49,20 @@ log = logging.getLogger("helper")
 
 
 # --- Home Assistant -------------------------------------------------------
+
+def addon_ingress_url() -> str:
+    """As an add-on, the path that opens this add-on's page in Home Assistant."""
+    request = urllib.request.Request(
+        "http://supervisor/addons/self/info",
+        headers={"Authorization": f"Bearer {SUPERVISOR_TOKEN}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return f"/hassio/ingress/{json.load(response)['data']['slug']}"
+    except (OSError, KeyError, ValueError) as err:
+        log.warning("Could not ask the Supervisor for the add-on address: %s", err)
+        return ""
+
 
 def call_ha(service: str, data: dict) -> bool:
     """Call a Home Assistant service. Returns True on success."""
@@ -224,6 +239,9 @@ def run(browser: subprocess.Popen) -> None:
 
 
 def main() -> None:
+    global HELPER_URL
+    if SUPERVISOR_TOKEN and not HELPER_URL:
+        HELPER_URL = addon_ingress_url()
     while True:
         browser = start_browser()
         try:
