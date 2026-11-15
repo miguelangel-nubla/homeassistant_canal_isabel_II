@@ -31,6 +31,9 @@ else
 fi
 # shellcheck disable=SC2086
 x11vnc -display "$DISPLAY" $VNC_AUTH -forever -shared -localhost -quiet -bg -o /tmp/x11vnc.log >/dev/null
-websockify --web /usr/share/novnc 6080 localhost:5900 >/tmp/websockify.log 2>&1 &
+# Listen on IPv6 too where the container has it (the socket then takes IPv4 as well): a proxy that resolves
+# this container to its IPv6 address would otherwise get "connection refused".
+if [ -e /proc/net/if_inet6 ]; then LISTEN="[::]:6080"; else LISTEN="6080"; fi
+websockify --web /usr/share/novnc "$LISTEN" localhost:5900 >/tmp/websockify.log 2>&1 &
 
 exec python3 -u /app/helper.py
