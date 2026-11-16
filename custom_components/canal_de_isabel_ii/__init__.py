@@ -68,7 +68,7 @@ PLATFORMS = ["sensor", "binary_sensor", "number"]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-# Kept in hass.data[DOMAIN] next to the entries: when a helper last asked for work.
+# Kept in hass.data[DOMAIN]: when a helper last asked for work.
 HELPER_SEEN = "helper_seen"
 
 SESSION_REQUEST_SCHEMA = vol.Schema({vol.Optional("helper_url"): cv.string})
@@ -106,7 +106,10 @@ class Runtime:
 
 
 def _runtime(hass: HomeAssistant, entry: ConfigEntry) -> Optional[Runtime]:
-    return hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    """What a loaded entry keeps (entry.runtime_data). None while it is not loaded."""
+    if entry.state is not ConfigEntryState.LOADED:
+        return None
+    return getattr(entry, "runtime_data", None)
 
 
 def _login_issue_id(entry: ConfigEntry) -> str:
@@ -346,7 +349,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         update_interval=REFRESH_INTERVAL,
     )
     runtime = Runtime(coordinator=coordinator)
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime
+    entry.runtime_data = runtime
 
     # A fetch that fails (the portal is down, the page could not be read)
     # does not stop the setup: it is tried again in a few minutes.
@@ -369,7 +372,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        runtime: Runtime = hass.data[DOMAIN].pop(entry.entry_id)
+        runtime: Runtime = entry.runtime_data
         if runtime.tracker is not None:
             await runtime.tracker.async_close()
         ir.async_delete_issue(hass, DOMAIN, _login_issue_id(entry))

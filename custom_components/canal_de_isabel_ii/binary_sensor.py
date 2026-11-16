@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
 from .insights import LEAK_HOURS, REST_LITERS, Insights
 from .sensor import ContractEntity, insights_for
 
@@ -21,7 +20,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the binary sensor platform."""
-    runtime = hass.data[DOMAIN][entry.entry_id]
+    runtime = entry.runtime_data
     coordinator = runtime.coordinator
     known: set = set()
 
@@ -58,7 +57,6 @@ class CanalIsabelIILeakSensor(ContractEntity, BinarySensorEntity):
         self._attr_translation_key = "possible_leak"
         self._attr_unique_id = f"canal_ii_possible_leak_{contract_id}"
         self._attr_device_class = BinarySensorDeviceClass.PROBLEM
-        self._attr_icon = "mdi:pipe-leak"
 
     def _found(self) -> Insights:
         """The readings, judged with this contract's settings."""

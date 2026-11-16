@@ -74,7 +74,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the sensor platform."""
-    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
+    coordinator = entry.runtime_data.coordinator
     registry = er.async_get(hass)
     with_consumption: set = set()
     with_meter: set = set()
@@ -152,7 +152,6 @@ class CanalIsabelIILastDaySensor(_ContractSensor):
         self._attr_device_class = SensorDeviceClass.VOLUME
         # No state class, like the hourly sensor: the history is the statistic.
         self._attr_suggested_display_precision = 0
-        self._attr_icon = "mdi:water"
 
     @property
     def native_value(self) -> Optional[float]:
@@ -178,7 +177,6 @@ class CanalIsabelIIMinimumFlowSensor(_ContractSensor):
         self._attr_device_class = SensorDeviceClass.VOLUME_FLOW_RATE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_suggested_display_precision = 1
-        self._attr_icon = "mdi:water-outline"
 
     @property
     def native_value(self) -> Optional[float]:
@@ -223,7 +221,6 @@ class CanalIsabelIIConsumptionSensor(_ContractSensor):
         self._attr_device_class = SensorDeviceClass.VOLUME
         # No state class: the hourly history is written as an external
         # statistic, so Home Assistant must not build its own from this state.
-        self._attr_icon = "mdi:water"
 
     def _latest(self) -> Optional[Reading]:
         readings = _readings_for(self.coordinator.data, self._contract_id)
@@ -260,7 +257,6 @@ class CanalIsabelIIMeterReadingSensor(_ContractSensor):
         self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
         self._attr_device_class = SensorDeviceClass.WATER
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_icon = "mdi:counter"
         self._summary: Optional[MeterSummary] = _meter_for(coordinator.data, contract_id)
 
     def _handle_coordinator_update(self) -> None:
