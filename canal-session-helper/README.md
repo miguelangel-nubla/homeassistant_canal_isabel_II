@@ -4,4 +4,4 @@ Un navegador que se ejecuta en tu servidor para la integración [Canal de Isabel
 
 Sustituye a copiar la cookie a mano. Sin credenciales también sirve: inicias sesión tú en su navegador y él te avisa cuando hay que volver a entrar.
 
-Se puede usar como complemento de Home Assistant o como contenedor Docker. Las instrucciones de ambos están en [DOCS.md](DOCS.md).
+Se puede usar como aplicación de Home Assistant (lo que antes se llamaba complemento) o como contenedor Docker. Las instrucciones de ambos están en [DOCS.md](DOCS.md).
