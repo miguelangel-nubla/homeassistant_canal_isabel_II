@@ -1,24 +1,20 @@
+# Session helper as a plain Docker container. Every setting is explained in
+# DOCS.md ("Como contenedor Docker").
 services:
   canal-session-helper:
-    image: ghcr.io/miguelangel-nubla/canal-session-helper:dev
+    image: ghcr.io/miguelangel-nubla/canal-session-helper:latest
     # build: .                          # to build it yourself instead
     container_name: canal-session-helper
     restart: unless-stopped
     ports:
-      - "6080:6080"   # remote view of the browser: http://<host>:6080/vnc.html
+      - "6080:6080"                     # remote view of the browser
     environment:
       HA_URL: "http://homeassistant.local:8123"
       HA_TOKEN: "paste-a-long-lived-access-token"
-      VNC_PASSWORD: "change-me"          # VNC only uses the first 8 characters
-      # HA_TOKEN_FILE / VNC_PASSWORD_FILE: read the secret from a file instead
-      # HELPER_URL: "http://nas.local:6080/vnc.html?autoconnect=1&resize=scale"
-      # HA_ENTRY_ID: ""                  # only if you have several entries
-      # CHECK_INTERVAL: "600"            # seconds between session checks
-      # HA_VERIFY_SSL: "true"
+      VNC_PASSWORD: "change-me"
       TZ: "Europe/Madrid"
     volumes:
       - canal-session-data:/data
-    shm_size: "512m"
 
 volumes:
   canal-session-data:
