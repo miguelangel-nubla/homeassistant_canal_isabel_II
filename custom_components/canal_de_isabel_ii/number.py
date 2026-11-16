@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
 from .insights import LEAK_HOURS, REST_LITERS
 from .sensor import ContractEntity
 
@@ -22,7 +21,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the number platform."""
-    runtime = hass.data[DOMAIN][entry.entry_id]
+    runtime = entry.runtime_data
     coordinator = runtime.coordinator
     known: set = set()
 
@@ -89,7 +88,6 @@ class RestThresholdNumber(_LeakSetting):
     _attr_native_min_value = 0.0
     _attr_native_max_value = 100.0
     _attr_native_step = 0.1
-    _attr_icon = "mdi:water-off-outline"
 
 
 class LeakHoursNumber(_LeakSetting):
@@ -101,4 +99,3 @@ class LeakHoursNumber(_LeakSetting):
     _attr_native_min_value = 6
     _attr_native_max_value = 240
     _attr_native_step = 1
-    _attr_icon = "mdi:timer-outline"

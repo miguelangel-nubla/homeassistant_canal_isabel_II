@@ -231,7 +231,7 @@ async def test_each_contract_of_the_account_has_its_own_device(recorder_mock, ha
 
 async def test_overlapping_refresh_continues_the_series(recorder_mock, hass, portal):
     entry = await setup_entry(hass)
-    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
+    coordinator = entry.runtime_data.coordinator
 
     # The next download has slid forward: hours 1-4 instead of 0-2.
     portal.data = PortalData(readings=readings(1, [20, 30, 40, 50]), meter=None)
@@ -252,7 +252,7 @@ async def test_overlapping_refresh_continues_the_series(recorder_mock, hass, por
 
 async def test_first_download_asks_for_the_history_then_a_short_window(recorder_mock, hass, portal):
     entry = await setup_entry(hass)
-    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
+    coordinator = entry.runtime_data.coordinator
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -263,7 +263,7 @@ async def test_older_history_is_merged_before_existing_rows(recorder_mock, hass,
     # An install that already holds hours 2-4 and then receives hours 0-4.
     portal.data = PortalData(readings=readings(2, [30, 40, 50]), meter=METER)
     entry = await setup_entry(hass)
-    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
+    coordinator = entry.runtime_data.coordinator
     assert await stored_statistics(hass) == [(30.0, 30.0), (40.0, 70.0), (50.0, 120.0)]
 
     portal.data = PortalData(readings=readings(0, [10, 20, 30, 40, 50]), meter=None)
@@ -289,7 +289,7 @@ async def test_portal_error_at_setup_still_loads_and_recovers(
     assert hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_last_hour_s_consumption") is None
 
     portal.broken = False
-    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
+    coordinator = entry.runtime_data.coordinator
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -302,7 +302,7 @@ async def test_portal_error_at_setup_still_loads_and_recovers(
 async def test_history_is_asked_again_when_the_range_was_not_applied(recorder_mock, hass, portal):
     portal.data = PortalData(readings=readings(0, [10]), meter=None, range_applied=False)
     entry = await setup_entry(hass)
-    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
+    coordinator = entry.runtime_data.coordinator
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -356,7 +356,7 @@ async def test_an_ended_session_is_replaced_without_bothering_anyone(
     recorder_mock, hass, portal, entity_registry_enabled_by_default
 ):
     entry = await setup_entry(hass)
-    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
+    coordinator = entry.runtime_data.coordinator
     assert await helper_asks(hass) == []
 
     # By the next fetch the portal has ended the session, as it always does.

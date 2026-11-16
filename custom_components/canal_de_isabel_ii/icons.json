@@ -1,0 +1,48 @@
+{
+  "entity": {
+    "sensor": {
+      "last_day": {
+        "default": "mdi:water"
+      },
+      "minimum_flow": {
+        "default": "mdi:water-outline"
+      },
+      "data_until": {
+        "default": "mdi:calendar-clock"
+      },
+      "consumption": {
+        "default": "mdi:water"
+      },
+      "meter_reading": {
+        "default": "mdi:counter"
+      }
+    },
+    "binary_sensor": {
+      "possible_leak": {
+        "default": "mdi:pipe",
+        "state": {
+          "on": "mdi:pipe-leak"
+        }
+      }
+    },
+    "number": {
+      "rest_liters": {
+        "default": "mdi:water-off-outline"
+      },
+      "leak_hours": {
+        "default": "mdi:timer-outline"
+      }
+    }
+  },
+  "services": {
+    "session_request": {
+      "service": "mdi:account-clock"
+    },
+    "set_session": {
+      "service": "mdi:cookie"
+    },
+    "report_login": {
+      "service": "mdi:alert-circle-outline"
+    }
+  }
+}
