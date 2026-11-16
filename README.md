@@ -12,6 +12,8 @@ Componente para integrar los datos de consumo de agua del Canal de Isabel II en 
 
 ### HACS (Recomendado)
 
+[![Abrir el repositorio en HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=miguelangel-nubla&repository=homeassistant_canal_isabel_II&category=integration)
+
 1.  Asegúrate de tener [HACS](https://hacs.xyz/) instalado.
 2.  Ve a **HACS > Integraciones**.
 3.  Haz clic en los tres puntos de arriba a la derecha y elige **Repositorios personalizados**.

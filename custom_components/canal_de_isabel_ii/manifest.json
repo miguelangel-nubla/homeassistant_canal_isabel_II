@@ -1,13 +1,17 @@
 {
     "domain": "canal_de_isabel_ii",
     "name": "Canal de Isabel II",
-    "codeowners": [],
+    "codeowners": [
+        "@miguelangel-nubla"
+    ],
     "config_flow": true,
     "dependencies": [
         "recorder"
     ],
     "documentation": "https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II",
+    "integration_type": "service",
     "iot_class": "cloud_polling",
+    "issue_tracker": "https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues",
     "requirements": [
         "beautifulsoup4>=4.12.0"
     ],
