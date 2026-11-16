@@ -123,6 +123,8 @@ En la configuración del panel de Energía (**Ajustes > Paneles > Energía**), e
 Cada importación continúa la serie guardada, así que volver a descargar las mismas horas no duplica ni descuadra nada.
 
 > [!IMPORTANT]
+> **Si actualizas desde 2026.11.9 o anterior:** las horas se guardaban una hora tarde. El Canal etiqueta cada hora con el momento en que termina (la fila «00» de hoy es la última hora de ayer) y la integración la tomaba por el momento en que empieza. Al actualizar, el histórico guardado se mueve una hora atrás él solo, una única vez; los litros y los totales no cambian, pero el reparto por días sí: la última hora de cada día vuelve a su día.
+>
 > **Si actualizas desde 2026.11.5 o anterior:** actualiza la integración y el ayudante a la vez. Home Assistant te pedirá el documento y la contraseña de la oficina virtual, que ahora se guardan en la integración; el histórico se conserva. El ayudante ya no tiene opciones propias (`document`, `password`, `CANAL_DOCUMENT`, `CANAL_PASSWORD`...) y pegar la cookie a mano ya no es una forma de configurar la integración.
 >
 > **Si actualizas desde una versión anterior a 2026.11:** el histórico ya no se guarda en el sensor `Canal de Isabel II Total`, que se elimina. Tienes que volver a elegir la fuente de agua en el panel de Energía. Las estadísticas antiguas de ese sensor se pueden borrar desde [**Herramientas para desarrolladores > Estadísticas**](https://my.home-assistant.io/redirect/tools_statistics/).

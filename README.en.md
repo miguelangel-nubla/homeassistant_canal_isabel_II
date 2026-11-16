@@ -125,6 +125,8 @@ In the configuration of the Energy dashboard (**Settings > Dashboards > Energy**
 Each import continues the stored series, so downloading the same hours again does not duplicate or distort anything.
 
 > [!IMPORTANT]
+> **If you update from 2026.11.9 or earlier:** the hours were stored one hour late. The Canal labels each hour with the moment it ends (today's "00" row is yesterday's last hour) and the integration took it for the moment it starts. On updating, the stored history moves one hour back by itself, once; the liters and the totals do not change, but the split by days does: the last hour of each day goes back to its day.
+>
 > **If you update from 2026.11.5 or earlier:** update the integration and the helper together. Home Assistant will ask for the document number and the password of the virtual office, which are now kept in the integration; the history is preserved. The helper no longer has options of its own (`document`, `password`, `CANAL_DOCUMENT`, `CANAL_PASSWORD`...) and pasting the cookie by hand is no longer a way to set the integration up.
 >
 > **If you update from a version before 2026.11:** the history is no longer kept in the sensor `Canal de Isabel II Total`, which is removed. You have to choose the water source again in the Energy dashboard. The old statistics of that sensor can be deleted from [**Developer tools > Statistics**](https://my.home-assistant.io/redirect/tools_statistics/).

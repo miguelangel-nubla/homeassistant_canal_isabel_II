@@ -8,7 +8,9 @@ The CSV looks like:
     Contrato,Periodo,Contador,Dirección,Frecuencia,Fecha/Hora,Consumo (litros)
     999000001,Facturado,Y20HK123456,C/ Ejemplo,Horaria,22/04/2026 03,12
 
-"Fecha/Hora" is Madrid wall-clock time with hour resolution.
+"Fecha/Hora" is Madrid wall-clock time with hour resolution, and names the
+END of the hour it measures: the row "22/04/2026 03" is the water used from
+02:00 to 03:00.
 """
 from __future__ import annotations
 
@@ -22,10 +24,19 @@ from zoneinfo import ZoneInfo
 PORTAL_TZ = ZoneInfo("Europe/Madrid")
 
 # Whether the hour in "Fecha/Hora" names the end of the measured hour (True)
-# or its start (False). Checked against the portal 2026-11: its daily totals
-# equal the sum of that day's labels 00 to 23 (36 days out of 36), so a label
-# belongs to the day and hour it names.
-HOUR_LABEL_IS_END = False
+# or its start (False).
+#
+# It names the end. Measured 2026-11-16 against the meter's own absolute
+# reading, which the portal shows with its time: between the readings of
+# 15/11 00:00 and 16/11 00:00 the meter advanced 382 L. The rows labelled
+# 15/11 01 to 16/11 00 add up to 382 L; those labelled 15/11 00 to 15/11 23,
+# to 310 L. The newest row published is always the "00" of today, which is
+# yesterday's last hour.
+#
+# The portal's own daily totals add up each date's labels 00 to 23, so they
+# count the last hour of every day with the following day. They are not a
+# guide to when the water was used.
+HOUR_LABEL_IS_END = True
 
 TIME_FORMAT = "%d/%m/%Y %H"
 
@@ -58,10 +69,13 @@ def _delimiter(text: str) -> str:
 
 
 def _parse_start(label: str) -> datetime:
-    local = datetime.strptime(label, TIME_FORMAT)
-    if HOUR_LABEL_IS_END:
-        local -= timedelta(hours=1)
-    return local.replace(tzinfo=PORTAL_TZ).astimezone(timezone.utc)
+    """The start of the hour a label stands for, in UTC.
+
+    The hour is taken off in UTC, not on the wall clock: on the day the
+    clocks go forward, the hour that ends at 03:00 started at 01:00.
+    """
+    named = datetime.strptime(label, TIME_FORMAT).replace(tzinfo=PORTAL_TZ).astimezone(timezone.utc)
+    return named - timedelta(hours=1) if HOUR_LABEL_IS_END else named
 
 
 def parse_csv(text: str) -> List[Reading]:

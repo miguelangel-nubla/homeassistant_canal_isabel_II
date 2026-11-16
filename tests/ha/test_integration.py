@@ -29,7 +29,10 @@ from custom_components.canal_de_isabel_ii.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from custom_components.canal_de_isabel_ii.meter_parser import MeterSummary
-from custom_components.canal_de_isabel_ii.statistics import async_import_consumption
+from custom_components.canal_de_isabel_ii.statistics import (
+    async_import_consumption,
+    async_move_hours_back,
+)
 
 CONTRACT = "999000001"
 STATISTIC_ID = f"{DOMAIN}:consumption_{CONTRACT}"
@@ -320,6 +323,35 @@ async def test_imports_in_a_row_do_not_wait_for_the_recorder(recorder_mock, hass
         (30.0, 60.0),
         (40.0, 100.0),
     ]
+
+
+async def stored_hours(hass):
+    await async_wait_recording_done(hass)
+    result = await get_instance(hass).async_add_executor_job(
+        statistics_during_period, hass, T0 - timedelta(days=1), None, {STATISTIC_ID}, "hour", None, {"state", "sum"}
+    )
+    return [
+        (round((row["start"] - T0.timestamp()) / 3600), row["state"], row["sum"])
+        for row in result.get(STATISTIC_ID, [])
+    ]
+
+
+async def test_hours_stored_one_hour_late_are_moved_back_once(recorder_mock, hass, portal):
+    # What a version up to 2026.11.9 stored: every hour one hour late.
+    late = {T0 + timedelta(hours=hour): liters for hour, liters in ((-4, 1), (-3, 2), (1, 10), (2, 20), (3, 30))}
+    await async_import_consumption(hass, CONTRACT, late)
+    assert await stored_hours(hass) == [(-4, 1, 1), (-3, 2, 3), (1, 10, 13), (2, 20, 33), (3, 30, 63)]
+    hass.data.pop("canal_de_isabel_ii_written_statistics")  # as after a restart
+
+    # The new version starts. The portal gives the last hours again, now
+    # where they belong: hours 0 to 2.
+    await setup_entry(hass)
+    assert await stored_hours(hass) == [(-5, 1, 1), (-4, 2, 3), (0, 10, 13), (1, 20, 33), (2, 30, 63)]
+
+    # Only once: a second start leaves them where they are.
+    hass.data.pop("canal_de_isabel_ii_rewritten_statistics")
+    await async_move_hours_back(hass)
+    assert await stored_hours(hass) == [(-5, 1, 1), (-4, 2, 3), (0, 10, 13), (1, 20, 33), (2, 30, 63)]
 
 
 async def test_old_total_entity_is_removed(recorder_mock, hass, portal):
