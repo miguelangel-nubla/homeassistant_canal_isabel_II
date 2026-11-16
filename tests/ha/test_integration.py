@@ -205,6 +205,30 @@ async def test_the_leak_check_has_its_own_settings_for_each_contract(recorder_mo
     assert hass.states.get(leak).attributes["hours_for_a_leak"] == 120
 
 
+async def test_each_contract_of_the_account_has_its_own_device(recorder_mock, hass, portal):
+    other = "999000002"
+    theirs = [
+        Reading(contract=other, start=reading.start, liters=reading.liters * 2, label=reading.label, meter="Z99")
+        for reading in readings(0, [10, 20, 30])
+    ]
+    portal.data = PortalData(
+        readings=readings(0, [10, 20, 30]) + theirs,
+        meter=METER,
+        meters={
+            CONTRACT: METER,
+            other: MeterSummary(reading_m3=7.25, read_at=None, meter="Z99", address="", raw="7,250m³"),
+        },
+    )
+    await setup_entry(hass)
+
+    assert float(hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_meter_reading").state) == 56.735
+    assert float(hass.states.get(f"sensor.canal_de_isabel_ii_{other}_meter_reading").state) == 7.25
+    assert hass.states.get(f"binary_sensor.canal_de_isabel_ii_{other}_possible_leak") is not None
+    registry = er.async_get(hass)
+    assert registry.async_get_entity_id("number", DOMAIN, f"canal_ii_rest_liters_{other}")
+    assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0)]
+
+
 async def test_overlapping_refresh_continues_the_series(recorder_mock, hass, portal):
     entry = await setup_entry(hass)
     coordinator = hass.data[DOMAIN][entry.entry_id].coordinator

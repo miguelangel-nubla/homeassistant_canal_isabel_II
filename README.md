@@ -14,7 +14,7 @@ El Canal no ofrece una API pública. Los datos se leen de la oficina virtual, y 
 
 El Canal publica los datos con medio día o un día de retraso, así que nada de esto es en tiempo real: describe el último día publicado.
 
-Por cada contrato, en el dispositivo `Canal de Isabel II <contrato>`:
+Por cada contrato de la cuenta, en el dispositivo `Canal de Isabel II <contrato>`:
 
 | Qué | Para qué |
 |-----|----------|
@@ -127,7 +127,7 @@ Cada importación continúa la serie guardada, así que volver a descargar las m
 
 ## Limitaciones conocidas
 
-- Si la cuenta tiene varios contratos, solo se lee el que el portal muestra seleccionado.
+- Si la cuenta tiene varios contratos se leen todos, cada uno con su dispositivo, hasta un máximo de 20. No se ha podido probar con una cuenta real de varios contratos: si tienes una y algo no cuadra, [abre una issue](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues).
 - La noche del cambio de hora de otoño el portal publica una sola fila para las dos horas que se llaman 02:00. En Home Assistant esa fila queda en una hora y la siguiente aparece vacía.
 
 ## Referencia

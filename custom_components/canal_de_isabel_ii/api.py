@@ -1,7 +1,7 @@
 """API Client for Canal de Isabel II."""
 import logging
 import ssl
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -11,7 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from .const import (
     BASE_URL,
     CONSUMPTION_URL,
@@ -48,6 +48,11 @@ class _PortalAdapter(HTTPAdapter):
         return super().init_poolmanager(*args, **kwargs)
 
 
+# An administrator's account can hold hundreds of contracts, and each one is
+# two requests. More than this are not read.
+MAX_CONTRACTS = 20
+
+
 class PortalError(Exception):
     """The portal could not be read."""
 
@@ -60,11 +65,16 @@ class AuthError(PortalError):
 class PortalData:
     """Everything read from the portal in one fetch."""
 
+    # The hourly readings of every contract of the account.
     readings: List[Reading]
+    # The meter summary of the contract the page showed first. Kept for the
+    # case in which it cannot be told whose it is; see meters.
     meter: Optional[MeterSummary]
     # False when a date range was asked for but the page's date fields were
     # not found, so only the portal's default range was read.
     range_applied: bool = True
+    # The meter summary of each contract, by contract number.
+    meters: Dict[str, MeterSummary] = field(default_factory=dict)
 
 class CanalIsabelIIAPI:
     """API Client for Canal de Isabel II."""
@@ -139,7 +149,7 @@ class CanalIsabelIIAPI:
             raise PortalError(f"Error talking to the portal: {err}") from err
 
     def _fetch_consumption_data(self, days: Optional[int]) -> PortalData:
-        # 1. Get the consumption page to find the dynamic CSV link and form data
+        # 1. The consumption page: its form, and the contracts of the account.
         response = self._http.get(CONSUMPTION_URL, timeout=30, allow_redirects=True)
 
         if response.status_code in (401, 403):
@@ -149,58 +159,122 @@ class CanalIsabelIIAPI:
         if response.status_code != 200:
             raise PortalError(f"Consumption page returned HTTP {response.status_code}")
 
-        page_html = response.text
-        soup = BeautifulSoup(page_html, 'html.parser')
-        range_applied = True
+        soup = BeautifulSoup(response.text, 'html.parser')
+        contracts = self._contracts(soup)
+        if len(contracts) > MAX_CONTRACTS:
+            _LOGGER.warning(
+                "The account has %s contracts; only the first %s are read",
+                len(contracts),
+                MAX_CONTRACTS,
+            )
+            contracts = contracts[:MAX_CONTRACTS]
 
-        # 2. Switch to Hourly Resolution
+        # 2. The page shows one contract at a time: ask for each in turn.
+        # An account with one contract, or a page without the choice, is a
+        # single request for whatever the page shows.
+        readings: List[Reading] = []
+        meters: Dict[str, MeterSummary] = {}
+        first_meter: Optional[MeterSummary] = None
+        range_applied = True
+        seen: set = set()
+        for index, contract in enumerate(contracts or [None]):
+            page_html, applied = self._hourly_page(response, soup, days, contract)
+            range_applied = range_applied and applied
+            found = self._download_csv(page_html)
+            # Should the portal answer with more than the contract asked
+            # for, each contract is taken once.
+            new = {reading.contract for reading in found} - seen
+            readings.extend(reading for reading in found if reading.contract in new)
+            seen |= new
+
+            # The absolute meter reading shown above the chart.
+            meter = parse_meter_summary(page_html)
+            if meter is None:
+                _LOGGER.debug("No meter summary found on the consumption page")
+            else:
+                if index == 0:
+                    first_meter = meter
+                owner = contract if contract in new else (next(iter(new)) if len(new) == 1 else None)
+                if owner is not None:
+                    meters[owner] = meter
+        _LOGGER.debug("Downloaded %s hourly readings of %s contracts", len(readings), len(seen))
+
+        return PortalData(
+            readings=readings, meter=first_meter, range_applied=range_applied, meters=meters
+        )
+
+    @staticmethod
+    def _contracts(soup: BeautifulSoup) -> List[str]:
+        """The contracts the page lets choose from, the one it shows first."""
+        select = soup.find("select", id="contratosSelect")
+        if select is None:
+            return []
+        options = select.find_all("option")
+        options.sort(key=lambda option: not option.has_attr("selected"))
+        values = [option.get("value", "").strip() for option in options]
+        return list(dict.fromkeys(value for value in values if value))
+
+    def _hourly_page(
+        self, response, soup: BeautifulSoup, days: Optional[int], contract: Optional[str]
+    ) -> Tuple[str, bool]:
+        """Ask for the hourly data of a contract. Returns (page, range applied).
+
+        Without the form the page is returned as it came, with whatever
+        resolution and range it shows.
+        """
         resolution_select = soup.find("select", id="selectPeriodicidad")
         form = resolution_select.find_parent("form") if resolution_select else None
         select_name = resolution_select.get("name") if resolution_select else None
-        if select_name and form:
-            data = {}
-            for inp in form.find_all("input"):
-                name = inp.get("name")
-                if name:
-                    data[name] = inp.get("value", "")
+        if not (select_name and form):
+            return response.text, True
 
-            # Handle contract selection if present (preserve selection)
-            contract_select = soup.find("select", id="contratosSelect")
-            if contract_select:
-                selected_opt = contract_select.find("option", selected=True) or contract_select.find("option")
-                if selected_opt:
-                    data[contract_select.get("name")] = selected_opt["value"]
+        data = {}
+        for inp in form.find_all("input"):
+            name = inp.get("name")
+            if name:
+                data[name] = inp.get("value", "")
 
-            data[select_name] = "Horaria"
+        contract_select = soup.find("select", id="contratosSelect")
+        if contract_select and contract_select.get("name"):
+            if contract is None:
+                # Keep the page's own selection.
+                selected = contract_select.find("option", selected=True) or contract_select.find("option")
+                contract = selected["value"] if selected else None
+            if contract is not None:
+                data[contract_select["name"]] = contract
 
-            if days is not None:
-                range_applied = False
-                today = datetime.now(PORTAL_TZ).date()
-                date_from = form.find("input", id="fechaDesde1")
-                date_to = form.find("input", id="fechaHasta1")
-                if date_from and date_to and date_from.get("name") and date_to.get("name"):
-                    data[date_from["name"]] = (today - timedelta(days=days)).isoformat()
-                    data[date_to["name"]] = today.isoformat()
-                    range_applied = True
-                else:
-                    _LOGGER.warning(
-                        "Date range fields not found on the consumption page; "
-                        "only the portal's default range will be read"
-                    )
+        data[select_name] = "Horaria"
 
-            _LOGGER.debug("Switching to Hourly resolution...")
-            action = urljoin(response.url, form.get("action") or "")
-            post_response = self._http.post(action, data=data, timeout=30)
-            if "login" in post_response.url:
-                raise AuthError("Authentication failed: Redirected to login page")
-            if post_response.status_code != 200:
-                raise PortalError(
-                    f"Asking for hourly data returned HTTP {post_response.status_code}"
+        range_applied = True
+        if days is not None:
+            range_applied = False
+            today = datetime.now(PORTAL_TZ).date()
+            date_from = form.find("input", id="fechaDesde1")
+            date_to = form.find("input", id="fechaHasta1")
+            if date_from and date_to and date_from.get("name") and date_to.get("name"):
+                data[date_from["name"]] = (today - timedelta(days=days)).isoformat()
+                data[date_to["name"]] = today.isoformat()
+                range_applied = True
+            else:
+                _LOGGER.warning(
+                    "Date range fields not found on the consumption page; "
+                    "only the portal's default range will be read"
                 )
-            page_html = post_response.text
-            soup = BeautifulSoup(page_html, 'html.parser')
 
-        # 3. Find CSV Link
+        _LOGGER.debug("Switching to Hourly resolution...")
+        action = urljoin(response.url, form.get("action") or "")
+        post_response = self._http.post(action, data=data, timeout=30)
+        if "login" in post_response.url:
+            raise AuthError("Authentication failed: Redirected to login page")
+        if post_response.status_code != 200:
+            raise PortalError(
+                f"Asking for hourly data returned HTTP {post_response.status_code}"
+            )
+        return post_response.text, range_applied
+
+    def _download_csv(self, page_html: str) -> List[Reading]:
+        """Download the export the page links to, and parse it."""
+        soup = BeautifulSoup(page_html, 'html.parser')
         # The page links the same export as CSV and as XLSX.
         csv_link_tag = soup.find(
             'a', href=lambda x: x and 'export-csv' in x and 'fileFormat=CSV' in x
@@ -216,7 +290,6 @@ class CanalIsabelIIAPI:
         if not csv_url.startswith('http'):
             csv_url = BASE_URL + csv_url
 
-        # 4. Download and parse the CSV
         csv_response = self._http.get(csv_url, timeout=60)
         if "login" in csv_response.url:
             raise AuthError("Authentication failed: Redirected to login page")
@@ -224,12 +297,4 @@ class CanalIsabelIIAPI:
         csv_text = decode_csv(csv_response.content)
         if csv_text.lstrip()[:1] == "<":
             raise PortalError("The CSV download returned a web page instead of data")
-        readings = parse_csv(csv_text)
-        _LOGGER.debug("Downloaded %s hourly readings", len(readings))
-
-        # 5. The absolute meter reading shown above the chart
-        meter = parse_meter_summary(page_html)
-        if meter is None:
-            _LOGGER.debug("No meter summary found on the consumption page")
-
-        return PortalData(readings=readings, meter=meter, range_applied=range_applied)
+        return parse_csv(csv_text)
