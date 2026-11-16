@@ -307,6 +307,8 @@ async def test_set_session_rejects_an_invalid_cookie(recorder_mock, hass, portal
 
 async def test_a_refused_login_asks_for_the_credentials_again(recorder_mock, hass, portal):
     entry = await setup_entry(hass, jsessionid="")
+    await hass.services.async_call(DOMAIN, "report_login", {"result": "failed"}, blocking=True)
+    assert issues(hass)[f"login_needs_a_person_{entry.entry_id}"].translation_key == "login_failed"
     await hass.services.async_call(
         DOMAIN,
         "report_login",
@@ -317,6 +319,8 @@ async def test_a_refused_login_asks_for_the_credentials_again(recorder_mock, has
 
     flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     assert [flow["context"]["source"] for flow in flows] == ["reauth"]
+    # The notice of the earlier try is gone: it no longer describes the situation.
+    assert not issues(hass)
     # The helper is not given the refused credentials again.
     assert await helper_asks(hass) == []
 
@@ -344,8 +348,8 @@ async def test_a_login_that_needs_a_person_is_a_repair_issue(recorder_mock, hass
         blocking=True,
     )
     issue = issues(hass)[f"login_needs_a_person_{entry.entry_id}"]
-    assert issue.translation_key == f"login_{result}"
-    assert "http://helper.example/" in issue.translation_placeholders["link"]
+    assert issue.translation_key == f"login_{result}_link"
+    assert issue.translation_placeholders["url"] == "http://helper.example/"
     assert not hass.config_entries.flow.async_progress()
     # The helper keeps being asked: it retries by itself.
     assert len(await helper_asks(hass)) == 1

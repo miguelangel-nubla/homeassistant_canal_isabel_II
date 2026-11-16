@@ -196,6 +196,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         if result == LOGIN_REFUSED:
             # Wrong credentials, most likely: ask for them again.
             runtime.refused = True
+            # What an earlier try reported no longer describes the situation.
+            ir.async_delete_issue(hass, DOMAIN, _login_issue_id(entry))
             entry.async_start_reauth(hass, data={"detail": detail})
             return
         retry_at = dt_util.parse_datetime(call.data.get("retry_at") or "")
@@ -206,11 +208,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             _login_issue_id(entry),
             is_fixable=False,
             severity=ir.IssueSeverity.WARNING,
-            translation_key=f"login_{result}",
+            # With the address of the helper's browser, when the helper knows
+            # it, the notice links to it.
+            translation_key=f"login_{result}_link" if url else f"login_{result}",
             translation_placeholders={
                 "retry_at": dt_util.as_local(retry_at).strftime("%H:%M") if retry_at else "?",
-                # The address of the helper's browser, when the helper knows it.
-                "link": f"\n\n[{url}]({url})" if url else "",
+                "url": url,
             },
             learn_more_url=HELPER_DOCS_URL,
         )
