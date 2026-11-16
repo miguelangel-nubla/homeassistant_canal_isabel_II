@@ -86,11 +86,27 @@ LOGIN_FORM_JS = (
     "!!document.querySelector('#btLogin') && !!document.querySelector('#numeroDocumento')"
     " && !!document.querySelector('#passwordFieldHidden')"
 )
-# True when the form holds something this script did not write there.
-TYPED_BY_PERSON_JS = (
-    "!window.__helperLogin && ['numeroDocumento', 'passwordFieldHidden']"
-    ".some(id => (document.getElementById(id) || {}).value)"
+# Put in every page before its own scripts: notes when a person last typed.
+# Only real key presses count, which arrive through the remote view. Text
+# this script enters, and what the browser fills in by itself from its saved
+# passwords, come without one.
+WATCH_TYPING_JS = (
+    "document.addEventListener('keydown', event => {"
+    " if (event.isTrusted) window.__personTypedAt = Date.now(); }, true);"
 )
+# A person who typed this recently is taken to be filling in the form.
+PERSON_TYPING_SECONDS = 120
+PERSON_TYPING_JS = f"Date.now() - (window.__personTypedAt || 0) < {PERSON_TYPING_SECONDS * 1000}"
+# The SHA-256 of what a field holds, to check it without reading it back.
+# null where the page may not compute it (a page that is not HTTPS).
+FIELD_DIGEST_JS = """
+(async () => {
+    const value = document.getElementById('%s').value;
+    if (!window.crypto || !crypto.subtle) return null;
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+    return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+})()
+"""
 CAPTCHA_READY_JS = (
     "typeof grecaptcha !== 'undefined' && !!grecaptcha.enterprise"
     " && typeof recaptchaLogin !== 'undefined'"
@@ -274,6 +290,9 @@ class Tab:
             pages[0]["webSocketDebuggerUrl"], timeout=30, suppress_origin=True
         )
         self._next_id = 0
+        # The script is only added to new pages once the Page domain is on.
+        self._call("Page.enable")
+        self._call("Page.addScriptToEvaluateOnNewDocument", {"source": WATCH_TYPING_JS})
 
     def close(self) -> None:
         self._ws.close()
@@ -288,8 +307,12 @@ class Tab:
                     raise RuntimeError(f"{method}: {message['error']}")
                 return message["result"]
 
-    def evaluate(self, expression: str):
-        result = self._call("Runtime.evaluate", {"expression": expression, "returnByValue": True})
+    def evaluate(self, expression: str, wait: bool = False):
+        """The value of an expression in the page. wait: of the promise it gives."""
+        result = self._call(
+            "Runtime.evaluate",
+            {"expression": expression, "returnByValue": True, "awaitPromise": wait},
+        )
         return result["result"].get("value")
 
     def url(self) -> str:
@@ -335,16 +358,32 @@ class Tab:
             pass  # page is mid-navigation; the dialog comes back on the next page
 
     def type_into(self, element_id: str, text: str) -> bool:
-        """Replace the content of a field, as typing does. True if it took it.
+        """Make a field hold exactly this text, as typing does. True if it does.
 
         The text travels as keyboard input and never as part of a script, so
         it cannot end up in an error message or a log.
+
+        The field may not be empty, and may not stay as it is left: a
+        browser with saved passwords fills the form in by itself, when the
+        page loads or when a field takes the focus. So the field is emptied,
+        written, checked, and written again if something else got in.
         """
-        self.evaluate(
-            f"(() => {{ const field = document.getElementById('{element_id}');"
-            " field.focus(); field.select(); })()"
-        )
-        self._call("Input.insertText", {"text": text})
+        for _ in range(3):
+            self.evaluate(
+                f"(() => {{ const field = document.getElementById('{element_id}');"
+                " field.focus(); field.value = '';"
+                " field.dispatchEvent(new Event('input', {bubbles: true})); field.select(); })()"
+            )
+            self._call("Input.insertText", {"text": text})
+            time.sleep(0.5)  # what the browser adds on its own comes right after
+            if self._holds(element_id, text):
+                return True
+        return False
+
+    def _holds(self, element_id: str, text: str) -> bool:
+        digest = self.evaluate(FIELD_DIGEST_JS % element_id, wait=True)
+        if digest is not None:
+            return digest == hashlib.sha256(text.encode()).hexdigest()
         length = self.evaluate(f"document.getElementById('{element_id}').value.length")
         return length == len(text)
 
@@ -566,8 +605,8 @@ def serve(tab: Tab, request: dict, memory: dict) -> None:
             report_login(entry_id, auto.outcome or LOGIN_FAILED, auto.detail, auto.next_try)
             memory["reported"][entry_id] = time.monotonic()
         return
-    if tab.evaluate(TYPED_BY_PERSON_JS):
-        return  # a person is filling in the form
+    if tab.evaluate(PERSON_TYPING_JS):
+        return  # a person is filling in the form: leave it to them
 
     log.info("Logging in.")
     try:
