@@ -118,11 +118,25 @@
   },
   "entity": {
     "sensor": {
+      "last_day": {
+        "name": "Last day's consumption"
+      },
+      "minimum_flow": {
+        "name": "Last day's minimum flow"
+      },
+      "data_until": {
+        "name": "Data until"
+      },
       "consumption": {
-        "name": "Consumption"
+        "name": "Last hour's consumption"
       },
       "meter_reading": {
         "name": "Meter reading"
+      }
+    },
+    "binary_sensor": {
+      "possible_leak": {
+        "name": "Possible leak"
       }
     }
   },

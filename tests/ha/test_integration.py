@@ -132,18 +132,44 @@ async def stored_statistics(hass):
     return [(row["state"], row["sum"]) for row in result.get(STATISTIC_ID, [])]
 
 
-async def test_setup_imports_statistics_and_creates_sensors(recorder_mock, hass, portal):
+async def test_setup_imports_statistics_and_creates_sensors(
+    recorder_mock, hass, portal, entity_registry_enabled_by_default
+):
     entry = await setup_entry(hass)
     assert entry.state is ConfigEntryState.LOADED
 
     assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0)]
 
-    consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption")
+    consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_last_hour_s_consumption")
     assert float(consumption.state) == 30.0
     assert consumption.attributes["statistic_id"] == STATISTIC_ID
 
     meter = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_meter_reading")
     assert float(meter.state) == 56.735
+
+
+async def test_the_sensors_describe_the_last_full_day(recorder_mock, hass, portal):
+    # T0 is 02:00 in Madrid. Three full days from midnight, the last two
+    # with water running every hour, then two hours of a fourth.
+    first_day = [0, 0, 0, 0, 0, 0, 12, 40] + [10] * 16
+    wet_days = [0.5] * 48
+    fourth_day = [0.5] * 2
+    portal.data = PortalData(readings=readings(-2, first_day + wet_days + fourth_day), meter=METER)
+    await setup_entry(hass)
+    prefix = f"canal_de_isabel_ii_{CONTRACT}"
+
+    last_day = hass.states.get(f"sensor.{prefix}_last_day_s_consumption")
+    assert float(last_day.state) == 12.0
+    assert last_day.attributes["date"] == "2026-04-03"
+    assert float(hass.states.get(f"sensor.{prefix}_last_day_s_minimum_flow").state) == 0.5
+    assert hass.states.get(f"sensor.{prefix}_data_until").state == "2026-04-04T00:00:00+00:00"
+
+    leak = hass.states.get(f"binary_sensor.{prefix}_possible_leak")
+    assert leak.state == "on"
+    assert leak.attributes["hours_without_pause"] == 68  # since 06:00 of the first day
+    # The hourly sensor is off unless someone turns it on.
+    assert hass.states.get(f"sensor.{prefix}_last_hour_s_consumption") is None
+    assert er.async_get(hass).async_get(f"sensor.{prefix}_last_hour_s_consumption").disabled
 
 
 async def test_overlapping_refresh_continues_the_series(recorder_mock, hass, portal):
@@ -196,12 +222,14 @@ async def test_older_history_is_merged_before_existing_rows(recorder_mock, hass,
     ]
 
 
-async def test_portal_error_at_setup_still_loads_and_recovers(recorder_mock, hass, portal):
+async def test_portal_error_at_setup_still_loads_and_recovers(
+    recorder_mock, hass, portal, entity_registry_enabled_by_default
+):
     portal.broken = True
     entry = await setup_entry(hass)
     # Loaded: the fetch is tried again later and nothing hammers the portal.
     assert entry.state is ConfigEntryState.LOADED
-    assert hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption") is None
+    assert hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_last_hour_s_consumption") is None
 
     portal.broken = False
     coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
@@ -209,7 +237,7 @@ async def test_portal_error_at_setup_still_loads_and_recovers(recorder_mock, has
     await hass.async_block_till_done()
 
     # The sensors appear with the first data, without a reload.
-    consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption")
+    consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_last_hour_s_consumption")
     assert float(consumption.state) == 30.0
     assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0)]
 
@@ -244,7 +272,9 @@ async def test_old_total_entity_is_removed(recorder_mock, hass, portal):
     assert registry.async_get(old.entity_id) is None
 
 
-async def test_without_a_session_the_helper_is_asked_for_one(recorder_mock, hass, portal):
+async def test_without_a_session_the_helper_is_asked_for_one(
+    recorder_mock, hass, portal, entity_registry_enabled_by_default
+):
     entry = await setup_entry(hass, jsessionid="")
     assert entry.state is ConfigEntryState.LOADED
     assert portal.requested_days == []
@@ -259,13 +289,15 @@ async def test_without_a_session_the_helper_is_asked_for_one(recorder_mock, hass
 
     assert entry.data["jsessionid"] == "good"
     assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0)]
-    consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption")
+    consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_last_hour_s_consumption")
     assert float(consumption.state) == 30.0
     # Served: nothing is wanted until the next fetch finds the session gone.
     assert await helper_asks(hass) == []
 
 
-async def test_an_ended_session_is_replaced_without_bothering_anyone(recorder_mock, hass, portal):
+async def test_an_ended_session_is_replaced_without_bothering_anyone(
+    recorder_mock, hass, portal, entity_registry_enabled_by_default
+):
     entry = await setup_entry(hass)
     coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
     assert await helper_asks(hass) == []
@@ -276,7 +308,7 @@ async def test_an_ended_session_is_replaced_without_bothering_anyone(recorder_mo
         await hass.async_block_till_done()
 
         # The sensors keep their values, nobody is asked to do anything...
-        consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption")
+        consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_last_hour_s_consumption")
         assert float(consumption.state) == 30.0
         assert coordinator.last_update_success
         assert not hass.config_entries.flow.async_progress()
