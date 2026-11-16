@@ -18,8 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import fake_portal  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
-SET_SESSION = "canal_de_isabel_ii/set_session"
-NOTIFY = "persistent_notification/create"
+SET_SESSION = "set_session"
+REPORT = "report_login"
 
 
 def docker(*args: str, check: bool = True) -> str:
@@ -39,7 +39,8 @@ class Helper:
             "HA_URL": url,
             "HA_TOKEN": fake_portal.HA_TOKEN,
             "VNC_NO_PASSWORD": "true",
-            "CHECK_INTERVAL": "5",
+            "POLL_INTERVAL": "2",
+            "REPORT_INTERVAL": "6",
             "LOGIN_TIMEOUT": "20",
             **env,
         }
@@ -65,78 +66,115 @@ def wait_until(what: str, condition, seconds: int = 120):
     raise AssertionError(f"timed out waiting for {what}")
 
 
-def logs_in_and_again_when_the_session_ends(start, state) -> None:
-    helper = start(CANAL_DOCUMENT=fake_portal.DOCUMENT.lower(), CANAL_PASSWORD=fake_portal.PASSWORD)
-    first = wait_until("the session to reach Home Assistant", lambda: state.calls(SET_SESSION))[0]
-    assert first["jsessionid"] in state.sessions, first
+def sessions(state) -> list:
+    return [call["jsessionid"] for call in state.calls(SET_SESSION)]
+
+
+def reports(state) -> list:
+    return state.calls(REPORT)
+
+
+def logs_in_only_when_a_session_is_wanted(start, state) -> None:
+    helper = start()
+    time.sleep(10)
+    assert state.portal_hits == 0, "the portal was visited with nothing to do there"
+
+    state.want("one", fake_portal.DOCUMENT.lower(), fake_portal.PASSWORD)
+    first = wait_until("the session to reach Home Assistant", lambda: sessions(state))[0]
+    assert state.sessions[first] == fake_portal.DOCUMENT
+
+    # With the session delivered there is nothing to do at the portal.
+    hits = state.portal_hits
+    time.sleep(10)
+    assert state.portal_hits == hits, "the session is being kept alive"
 
     with state.lock:
         state.sessions.clear()  # the portal ends the session
-    wait_until("a second session", lambda: len(state.calls(SET_SESSION)) > 1)
-    second = state.calls(SET_SESSION)[-1]
-    assert second["jsessionid"] in state.sessions and second != first, second
+    state.want("one", fake_portal.DOCUMENT, fake_portal.PASSWORD)
+    wait_until("a second session", lambda: len(sessions(state)) > 1)
+    assert sessions(state)[1] in state.sessions and sessions(state)[1] != first
 
     assert len(state.login_posts) == 2, state.login_posts
     # The cookie dialog was answered with "allow all", once.
     assert [post["cookie_consent"] for post in state.login_posts] == ["all", "all"], state.login_posts
     assert helper.logs().count("Cookie dialog answered") == 1, helper.logs()
-    assert not state.calls(NOTIFY), state.calls(NOTIFY)
+    assert not reports(state), reports(state)
     assert fake_portal.PASSWORD not in helper.logs()
 
 
-def a_refused_login_is_not_repeated(start, state) -> None:
-    start(CANAL_DOCUMENT=fake_portal.DOCUMENT, CANAL_PASSWORD="wrong")
-    message = wait_until("the notification", lambda: state.calls(NOTIFY))[0]["message"]
-    assert "rechazado" in message and "Usuario o contraseña incorrectos" in message, message
-    assert "Se volverá a intentar a las" in message, message
-    time.sleep(20)
-    assert len(state.login_posts) == 1, state.login_posts
+def each_account_gets_its_own_session(start, state) -> None:
+    start()
+    state.want("one", fake_portal.DOCUMENT, fake_portal.PASSWORD)
+    state.want("two", fake_portal.OTHER_DOCUMENT, fake_portal.OTHER_PASSWORD)
+    wait_until("both sessions", lambda: len(sessions(state)) == 2)
+    # The fake Home Assistant only takes the session of the entry's account.
+    assert not state.wants, state.wants
+    assert [post["tipoDocumento"] for post in state.login_posts] == ["NIE", "NIF"], state.login_posts
+    assert not reports(state), reports(state)
 
-    # A restart is not a way to try again...
+
+def a_refused_login_is_reported_and_not_repeated(start, state) -> None:
+    start()
+    state.want("one", fake_portal.DOCUMENT, "wrong")
+    report = wait_until("the report", lambda: reports(state))[0]
+    assert report["result"] == "refused" and report["entry_id"] == "one", report
+    assert report["detail"] == "Usuario o contraseña incorrectos", report
+    assert report["retry_at"].endswith("+00:00"), report
+
+    # Home Assistant forgot (it restarted) and asks again: it is told again,
+    # and the portal is not.
     with state.lock:
-        state.ha_calls.clear()
-    start(CANAL_DOCUMENT=fake_portal.DOCUMENT, CANAL_PASSWORD="wrong")
-    message = wait_until("the notification after a restart", lambda: state.calls(NOTIFY))[0]["message"]
-    assert "en pausa" in message, message
-    time.sleep(10)
+        state.refused.clear()
+    wait_until("the reminder", lambda: len(reports(state)) > 1)
+    assert reports(state)[1] == report, reports(state)
+
+    # A restart of the helper is not a way to try again either.
+    with state.lock:
+        state.refused.clear()
+    start()
+    wait_until("the reminder after a restart", lambda: len(reports(state)) > 2)
     assert len(state.login_posts) == 1, state.login_posts
 
-    # ...but new credentials are.
-    start(CANAL_DOCUMENT=fake_portal.DOCUMENT, CANAL_PASSWORD=fake_portal.PASSWORD)
-    wait_until("the session after the password was corrected", lambda: state.calls(SET_SESSION))
+    # Entering the credentials again in Home Assistant is, even the same ones.
+    state.want("one", fake_portal.DOCUMENT, "wrong", set_at="2")
+    wait_until("the report of a second try", lambda: len(reports(state)) > 3)
     assert len(state.login_posts) == 2, state.login_posts
+    state.want("one", fake_portal.DOCUMENT, fake_portal.PASSWORD, set_at="3")
+    wait_until("the session once the password is right", lambda: sessions(state))
+    assert len(state.login_posts) == 3, state.login_posts
 
 
 def a_document_the_form_does_not_accept(start, state) -> None:
-    start(CANAL_DOCUMENT="not-a-document", CANAL_PASSWORD=fake_portal.PASSWORD)
-    message = wait_until("the notification", lambda: state.calls(NOTIFY))[0]["message"]
-    assert "Introduzca un número de documento correcto" in message, message
+    start()
+    state.want("one", "not-a-document", fake_portal.PASSWORD)
+    report = wait_until("the report", lambda: reports(state))[0]
+    assert report["result"] == "refused", report
+    assert "Introduzca un número de documento correcto" in report["detail"], report
     assert not state.login_posts, state.login_posts
 
 
 def a_captcha_challenge_asks_for_a_person(start, state) -> None:
     with state.lock:
         state.challenge = True
-    start(CANAL_DOCUMENT=fake_portal.DOCUMENT, CANAL_PASSWORD=fake_portal.PASSWORD)
-    message = wait_until("the notification", lambda: state.calls(NOTIFY))[0]["message"]
-    assert "captcha" in message, message
+    start(HELPER_URL="http://helper.example/")
+    state.want("one", fake_portal.DOCUMENT, fake_portal.PASSWORD)
+    report = wait_until("the report", lambda: reports(state))[0]
+    assert report["result"] == "challenge" and report["retry_at"], report
+    assert report["helper_url"] == "http://helper.example/", report
     assert not state.login_posts, state.login_posts
 
-
-def without_credentials_a_person_is_asked(start, state) -> None:
-    start()
-    message = wait_until("the notification", lambda: state.calls(NOTIFY))[0]["message"]
-    assert message.startswith("No hay ninguna sesión activa"), message
+    # The challenge stays on screen: the portal is left alone meanwhile.
+    hits = state.portal_hits
     time.sleep(10)
-    assert not state.login_posts, state.login_posts
+    assert state.portal_hits == hits, "the login page was reloaded under the challenge"
 
 
 SCENARIOS = [
-    logs_in_and_again_when_the_session_ends,
-    a_refused_login_is_not_repeated,
+    logs_in_only_when_a_session_is_wanted,
+    each_account_gets_its_own_session,
+    a_refused_login_is_reported_and_not_repeated,
     a_document_the_form_does_not_accept,
     a_captcha_challenge_asks_for_a_person,
-    without_credentials_a_person_is_asked,
 ]
 
 

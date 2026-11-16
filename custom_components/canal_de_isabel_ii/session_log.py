@@ -1,7 +1,7 @@
 """Record how long each portal session survives.
 
 The portal gives no documented session lifetime, so we measure it: when a
-session was handed to Home Assistant, every successful check, and the first
+session was handed to Home Assistant, every successful read, and the first
 failure. The history is kept in .storage so it survives restarts and can be
 compared across sessions (fixed duration, fixed clock time, or random).
 """
@@ -53,6 +53,11 @@ class SessionTracker:
         self._set_at = set_at
         self._records: List[Dict[str, Any]] = []
         self._current: Dict[str, Any] = {}
+
+    @property
+    def set_at(self) -> str:
+        """When the tracked session was delivered: what tells sessions apart."""
+        return self._set_at
 
     @property
     def records(self) -> List[Dict[str, Any]]:

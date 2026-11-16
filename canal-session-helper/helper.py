@@ -1,17 +1,20 @@
-"""Hold a portal session in a real browser and pass it to Home Assistant.
+"""Log in to the Canal de Isabel II virtual office for Home Assistant.
 
-The browser of this container logs in to the Canal de Isabel II virtual
-office, either by itself with the credentials it was given (CANAL_DOCUMENT
-and CANAL_PASSWORD) or by the hand of a person through the remote view.
-This script then reads the session cookie, hands it to the integration with
-the canal_de_isabel_ii.set_session service, and keeps checking the session.
-When the portal ends the session it logs in again. Only when that is not
-possible does it ask for a login through a Home Assistant notification.
+The integration canal_de_isabel_ii reads the portal with a browser session,
+and the portal's login form runs an invisible reCAPTCHA, so the login has
+to happen in a real browser. This is that browser.
 
-The login form runs an invisible reCAPTCHA, which is why the login happens
-in a real browser. Nothing here answers or avoids it: if it asks for a
-challenge, or the portal refuses the login, a person is asked to step in.
-The portal's cookie dialog is answered with "allow all".
+It is a client of Home Assistant and nothing calls it. Every minute it asks
+the integration which accounts want a session (service session_request,
+which also gives the credentials). For each one it logs in, hands the
+session cookie over (set_session), or says why it could not (report_login)
+so that the integration can tell the person. In between it does nothing:
+no session is kept alive.
+
+Nothing here answers or avoids the captcha. If it asks for a challenge, or
+the portal refuses the login, a person is asked to step in, and can log in
+by hand through the remote view of this browser. The portal's cookie dialog
+is answered with "allow all".
 """
 import glob
 import hashlib
@@ -32,43 +35,21 @@ BASE_URL = os.environ.get("PORTAL_URL", "https://oficinavirtual.canaldeisabelseg
 CONSUMPTION_URL = f"{BASE_URL}/group/ovir/consumo"
 CDP = "http://127.0.0.1:9222"
 PROFILE_DIR = "/data/profile"
-# The portal's cookie is a session cookie, which Chromium forgets when it
-# closes. A copy is kept here so a restart of the container or the browser
-# does not ask for a new login while the portal still accepts the session.
-SESSION_FILE = "/data/session"
 # What the automatic login remembers between restarts (see AutoLogin).
 LOGIN_STATE_FILE = "/data/login_state"
-RETRY_INTERVAL = 60
-NOTIFICATION_ID = "canal_de_isabel_ii_login_needed"
 
 HA_URL = os.environ["HA_URL"].rstrip("/")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 if not HA_TOKEN:
     with open(os.environ["HA_TOKEN_FILE"], encoding="utf-8") as _token_file:
         HA_TOKEN = _token_file.read().strip()
-HA_ENTRY_ID = os.environ.get("HA_ENTRY_ID", "")
 HA_VERIFY_SSL = os.environ.get("HA_VERIFY_SSL", "true").lower() != "false"
 HELPER_URL = os.environ.get("HELPER_URL", "")
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
-CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "600"))
 SCREEN_SIZE = os.environ.get("SCREEN_SIZE", "1280x800").replace("x", ",")
-LOGIN_POLL = 5
+# Seconds between questions to Home Assistant. They never reach the portal.
+POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "60"))
 
-
-def _secret(name: str) -> str:
-    """A secret given directly (NAME) or as the first line of a file (NAME_FILE)."""
-    value = os.environ.get(name, "")
-    path = os.environ.get(f"{name}_FILE", "")
-    if not value and path:
-        with open(path, encoding="utf-8") as secret_file:
-            value = secret_file.readline().rstrip("\r\n")
-    return value
-
-
-# Credentials for the automatic login. Without them a person logs in.
-LOGIN_DOCUMENT = os.environ.get("CANAL_DOCUMENT", "").strip().upper()
-LOGIN_PASSWORD = _secret("CANAL_PASSWORD")
-LOGIN_PROFILE = os.environ.get("CANAL_PROFILE", "").strip().lower() or "particular"
 # The profile to choose on the login form, by the id of its radio button.
 PROFILES = {
     "particular": "radioParticularLoginDesktop",
@@ -85,6 +66,9 @@ REFUSED_DELAYS = (3600, 6 * 3600)
 # A login that could not be completed (the portal is down, the page did not
 # load, a captcha challenge nobody answered) is tried again, forever.
 FAILED_DELAYS = (300, 900, 1800, 3600)
+# While a login is not due, Home Assistant is reminded of why this often.
+# It forgets when it restarts.
+REPORT_INTERVAL = int(os.environ.get("REPORT_INTERVAL", "600"))
 
 LOGIN_OK = "ok"
 LOGIN_REFUSED = "refused"      # the portal answered the login with the form again
@@ -138,6 +122,8 @@ PORTAL_ERRORS_JS = _SHOWN_TEXT_JS % (
     '[role="alert"], .alert-danger, .alert-error, .portlet-msg-error, #login-form .invalid.d-block'
 )
 
+# True on any page behind the login.
+INSIDE_JS = "location.pathname.startsWith('/group/')"
 # True once the page is a logged-in consumption page.
 LOGGED_IN_JS = (
     "location.pathname.startsWith('/group/') && "
@@ -164,8 +150,15 @@ def addon_ingress_url() -> str:
         return ""
 
 
-def call_ha(service: str, data: dict) -> bool:
-    """Call a Home Assistant service. Returns True on success."""
+_ha_problem = ""
+
+
+def call_ha(service: str, data: dict):
+    """Call a Home Assistant service. Returns its answer, or None if it failed.
+
+    A problem that repeats is logged once, not on every call.
+    """
+    global _ha_problem
     request = urllib.request.Request(
         f"{HA_URL}/api/services/{service}",
         data=json.dumps(data).encode(),
@@ -175,42 +168,51 @@ def call_ha(service: str, data: dict) -> bool:
     context = None
     if HA_URL.startswith("https") and not HA_VERIFY_SSL:
         context = ssl._create_unverified_context()
+    name = service.split("?")[0]
     try:
-        with urllib.request.urlopen(request, timeout=90, context=context):
-            return True
+        with urllib.request.urlopen(request, timeout=90, context=context) as response:
+            answer = json.load(response)
+        if _ha_problem:
+            log.info("Home Assistant answers again.")
+            _ha_problem = ""
+        return answer
     except urllib.error.HTTPError as err:
-        log.warning("Home Assistant refused %s: HTTP %s %s", service, err.code, err.read()[:300])
-    except OSError as err:
-        log.warning("Home Assistant not reachable for %s: %s", service, err)
-    return False
+        problem = f"Home Assistant refused {name}: HTTP {err.code} {err.read()[:300]}"
+    except (OSError, ValueError) as err:
+        problem = f"Home Assistant not reachable for {name}: {err}"
+    if problem != _ha_problem:
+        log.warning("%s", problem)
+        _ha_problem = problem
+    return None
 
 
-def send_session(jsessionid: str) -> bool:
-    data = {"jsessionid": jsessionid}
-    if HA_ENTRY_ID:
-        data["entry_id"] = HA_ENTRY_ID
-    return call_ha("canal_de_isabel_ii/set_session", data)
-
-
-def notify_login_needed(reason: str = "") -> bool:
-    """Ask for a login by hand. reason says why the automatic one did not do it."""
-    # Shown to the person in Home Assistant, whose users are Spanish speakers.
-    where = f"[Abre el navegador del ayudante]({HELPER_URL})" if HELPER_URL else "Abre el navegador del ayudante"
-    message = f"No hay ninguna sesión activa en la oficina virtual. {where} e inicia sesión."
-    if reason:
-        message = f"{reason}\n\n{message}"
-    return call_ha(
-        "persistent_notification/create",
-        {
-            "notification_id": NOTIFICATION_ID,
-            "title": "Canal de Isabel II: hay que iniciar sesión",
-            "message": message,
-        },
+def ask_for_work() -> list:
+    """The accounts that want a session now, each with its credentials."""
+    answer = call_ha(
+        "canal_de_isabel_ii/session_request?return_response",
+        {"helper_url": HELPER_URL} if HELPER_URL else {},
     )
+    try:
+        return answer["service_response"]["requests"]
+    except (KeyError, TypeError):
+        return []
 
 
-def dismiss_notification() -> None:
-    call_ha("persistent_notification/dismiss", {"notification_id": NOTIFICATION_ID})
+def send_session(entry_id: str, jsessionid: str) -> bool:
+    answer = call_ha("canal_de_isabel_ii/set_session", {"entry_id": entry_id, "jsessionid": jsessionid})
+    return answer is not None
+
+
+def report_login(entry_id: str, outcome: str, detail: str, next_try) -> None:
+    """Tell the integration that the login did not work, so it tells the person."""
+    data = {"entry_id": entry_id, "result": outcome}
+    if detail:
+        data["detail"] = detail
+    if next_try is not None:
+        data["retry_at"] = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(next_try))
+    if HELPER_URL:
+        data["helper_url"] = HELPER_URL
+    call_ha("canal_de_isabel_ii/report_login", data)
 
 
 # --- Browser --------------------------------------------------------------
@@ -235,7 +237,8 @@ def start_browser() -> subprocess.Popen:
             "--lang=es-ES",
             "--window-position=0,0",
             f"--window-size={SCREEN_SIZE}",
-            CONSUMPTION_URL,
+            # Nothing is asked of the portal until Home Assistant wants a session.
+            "about:blank",
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -257,7 +260,7 @@ class Tab:
         with urllib.request.urlopen(f"{CDP}/json/list", timeout=5) as response:
             pages = [t for t in json.load(response) if t.get("type") == "page"]
         if not pages:
-            request = urllib.request.Request(f"{CDP}/json/new?{CONSUMPTION_URL}", method="PUT")
+            request = urllib.request.Request(f"{CDP}/json/new?about:blank", method="PUT")
             with urllib.request.urlopen(request, timeout=5) as response:
                 pages = [json.load(response)]
         self._ws = websocket.create_connection(
@@ -364,91 +367,80 @@ class Tab:
         cookies = self._call("Network.getCookies", {"urls": [BASE_URL]})["cookies"]
         return next((c["value"] for c in cookies if c["name"] == "JSESSIONID"), "")
 
-    def set_session_cookie(self, value: str) -> None:
-        self._call(
-            "Network.setCookie",
-            {
-                "name": "JSESSIONID",
-                "value": value,
-                "url": BASE_URL,
-                "path": "/",
-                "secure": BASE_URL.startswith("https"),
-                "httpOnly": True,
-            },
-        )
-
-
-def saved_session() -> str:
-    try:
-        with open(SESSION_FILE, encoding="utf-8") as file:
-            return file.read().strip()
-    except OSError:
-        return ""
-
-
-def save_session(cookie: str) -> None:
-    """Keep (or with an empty value, forget) the session for the next start."""
-    try:
-        if not cookie:
-            if os.path.exists(SESSION_FILE):
-                os.remove(SESSION_FILE)
-            return
-        descriptor = os.open(SESSION_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
-            file.write(cookie)
-    except OSError as err:
-        log.warning("Could not update %s: %s", SESSION_FILE, err)
+    def forget_session(self) -> None:
+        """Log out, as far as the browser is concerned."""
+        self._call("Network.deleteCookies", {"name": "JSESSIONID", "url": BASE_URL})
 
 
 class AutoLogin:
-    """When the automatic login may be tried, remembered across restarts.
+    """When the login of an account may be tried, remembered across restarts.
 
     A restart must not be a way to try a refused password again, so the
     count of refusals and the time of the next try are kept in /data. They
-    are forgotten when the credentials change or a login succeeds, by this
-    script or by a person.
+    are forgotten when the credentials are entered again in Home Assistant
+    or a login succeeds, by this script or by a person.
     """
 
-    def __init__(self) -> None:
-        # Tells one set of credentials from another without keeping them.
+    def __init__(self, request: dict) -> None:
+        self._entry_id = request["entry_id"]
+        # Tells one entering of the credentials from another without keeping them.
         self._key = hashlib.sha256(
-            "\0".join((LOGIN_PROFILE, LOGIN_DOCUMENT, LOGIN_PASSWORD)).encode()
+            "\0".join(
+                str(request.get(field, ""))
+                for field in ("profile", "document", "password", "credentials_set_at")
+            ).encode()
         ).hexdigest()
         self.refusals = 0
         self.failures = 0
         self.next_try = 0.0  # epoch seconds; None when no more tries are due
+        self.outcome = ""    # how the last try ended, if it did not log in
+        self.detail = ""
         try:
-            with open(LOGIN_STATE_FILE, encoding="utf-8") as file:
-                state = json.load(file)
+            state = self._read()[self._entry_id]
             if state["key"] == self._key:
                 self.refusals = int(state["refusals"])
                 self.failures = int(state["failures"])
                 self.next_try = state["next_try"]
-        except (OSError, ValueError, KeyError, TypeError):
+                self.outcome = str(state["outcome"])
+                self.detail = str(state["detail"])
+        except (KeyError, ValueError, TypeError):
             pass
 
+    @staticmethod
+    def _read() -> dict:
+        try:
+            with open(LOGIN_STATE_FILE, encoding="utf-8") as file:
+                states = json.load(file)
+            return states if isinstance(states, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
     def _save(self) -> None:
-        state = {
+        states = self._read()
+        states[self._entry_id] = {
             "key": self._key,
             "refusals": self.refusals,
             "failures": self.failures,
             "next_try": self.next_try,
+            "outcome": self.outcome,
+            "detail": self.detail,
         }
         try:
             descriptor = os.open(LOGIN_STATE_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as file:
-                json.dump(state, file)
+                json.dump(states, file)
         except OSError as err:
             log.warning("Could not update %s: %s", LOGIN_STATE_FILE, err)
 
     def due(self) -> bool:
         return self.next_try is not None and time.time() >= self.next_try
 
-    def record(self, outcome: str) -> None:
+    def record(self, outcome: str, detail: str = "") -> None:
         """Note how a try ended and decide when the next one is."""
         if outcome == LOGIN_OK:
             self.reset()
             return
+        self.outcome, self.detail = outcome, detail
         if outcome == LOGIN_REFUSED:
             self.refusals += 1
             if self.refusals > len(REFUSED_DELAYS):
@@ -465,24 +457,18 @@ class AutoLogin:
         self._save()
 
     def reset(self) -> None:
-        if self.refusals or self.failures or self.next_try:
+        if self.refusals or self.failures or self.next_try or self.outcome:
             self.refusals = self.failures = 0
             self.next_try = 0.0
+            self.outcome = self.detail = ""
             self._save()
 
-    def when(self) -> str:
-        """The next try, in the words of the notification."""
-        if self.next_try is None:
-            return (
-                "No se volverá a intentar hasta que inicies sesión a mano "
-                "o cambies las credenciales del ayudante."
-            )
-        return time.strftime("Se volverá a intentar a las %H:%M.", time.localtime(self.next_try))
 
-
-def attempt_login(tab: Tab) -> tuple:
+def attempt_login(tab: Tab, request: dict) -> tuple:
     """Fill in the login form and send it. Returns (outcome, detail)."""
-    tab.open(CONSUMPTION_URL)  # without a session the portal answers with the login form
+    # A form this script has already written in is not used again.
+    if not tab.evaluate(f"{LOGIN_FORM_JS} && !window.__helperLogin"):
+        tab.open(CONSUMPTION_URL)  # without a session the portal answers with the login form
     if tab.logged_in():
         return LOGIN_OK, ""
     if not tab.wait_for(LOGIN_FORM_JS, 20):
@@ -492,16 +478,18 @@ def attempt_login(tab: Tab) -> tuple:
         return LOGIN_FAILED, "the captcha of the login form did not load"
     tab.allow_cookies(wait=10)
 
-    document_type = "NIE" if re.match(r"[XYZ]\d", LOGIN_DOCUMENT) else "NIF"
+    document = str(request["document"]).strip().upper()
+    document_type = "NIE" if re.match(r"[XYZ]\d", document) else "NIF"
+    profile = PROFILES.get(request.get("profile"), PROFILES["particular"])
     tab.evaluate(
         "(() => { window.__helperLogin = true;"
-        f" document.getElementById('{PROFILES[LOGIN_PROFILE]}').click();"
+        f" document.getElementById('{profile}').click();"
         " const type = document.getElementById('tipoDocumento');"
         f" if (type) {{ type.value = '{document_type}';"
         " type.dispatchEvent(new Event('change', {bubbles: true})); } })()"
     )
-    if not tab.type_into("numeroDocumento", LOGIN_DOCUMENT) or not tab.type_into(
-        "passwordFieldHidden", LOGIN_PASSWORD
+    if not tab.type_into("numeroDocumento", document) or not tab.type_into(
+        "passwordFieldHidden", str(request["password"])
     ):
         return LOGIN_FAILED, "the login form did not take the credentials"
     tab.click("btLogin")
@@ -522,7 +510,7 @@ def attempt_login(tab: Tab) -> tuple:
                 if complaint:
                     return LOGIN_REFUSED, complaint
                 continue
-            if tab.evaluate("location.pathname.startsWith('/group/')"):
+            if tab.evaluate(INSIDE_JS):
                 if not tab.logged_in():
                     tab.open(CONSUMPTION_URL)
                 if tab.logged_in():
@@ -535,132 +523,87 @@ def attempt_login(tab: Tab) -> tuple:
     return LOGIN_FAILED, "the portal did not answer the login"
 
 
-def automatic_login(tab: Tab, auto: AutoLogin) -> str:
-    """Try to log in. Returns "" on success, else why not, for the person."""
-    log.info("Logging in with the configured credentials.")
+def deliver(tab: Tab, request: dict, auto: AutoLogin) -> None:
+    """Hand the browser's session to Home Assistant."""
+    auto.reset()  # logged in: the refusals are history
+    if send_session(request["entry_id"], tab.session_cookie()):
+        log.info("Session handed to Home Assistant.")
+        # Leave the portal: an open page of it could keep talking to it.
+        tab.open("about:blank")
+
+
+def serve(tab: Tab, request: dict, memory: dict) -> None:
+    """Get Home Assistant the session it wants for one account.
+
+    The portal is only visited when there is something to do there: to log
+    in when a login is due, or to check on a page that looks logged in (a
+    person may have logged in through the remote view). While a failed
+    login waits for its next try, the login form stays on screen untouched.
+    """
+    entry_id = request["entry_id"]
+    auto = AutoLogin(request)
+    if memory["owner"] != entry_id:
+        # The browser holds no session, or that of another account.
+        tab.forget_session()
+        memory["owner"] = entry_id
+        tab.open(CONSUMPTION_URL)
+    elif tab.evaluate(INSIDE_JS):
+        tab.open(CONSUMPTION_URL)
+    if tab.logged_in():
+        deliver(tab, request, auto)
+        return
+
+    if not auto.due():
+        # Home Assistant forgets a report when it restarts: remind it.
+        if time.monotonic() - memory["reported"].get(entry_id, float("-inf")) >= REPORT_INTERVAL:
+            report_login(entry_id, auto.outcome or LOGIN_FAILED, auto.detail, auto.next_try)
+            memory["reported"][entry_id] = time.monotonic()
+        return
+    if tab.evaluate(TYPED_BY_PERSON_JS):
+        return  # a person is filling in the form
+
+    log.info("Logging in.")
     try:
-        outcome, detail = attempt_login(tab)
+        outcome, detail = attempt_login(tab, request)
     except (RuntimeError, TypeError, KeyError) as err:
         outcome, detail = LOGIN_FAILED, f"the browser did not follow: {err}"
-    auto.record(outcome)
+    auto.record(outcome, detail)
     if outcome == LOGIN_OK:
         log.info("Logged in.")
-        return ""
+        deliver(tab, request, auto)
+        return
     if outcome == LOGIN_REFUSED:
         log.warning("The portal refused the login%s.", f": {detail}" if detail else "")
-        reason = "El portal ha rechazado el inicio de sesión automático"
-        reason += f" («{detail}»)." if detail else ". Comprueba el documento, la contraseña y el perfil."
     elif outcome == LOGIN_CHALLENGE:
         log.warning("The captcha of the login form asks for a person.")
-        reason = "El portal pide resolver una comprobación (captcha) para iniciar sesión."
     else:
         log.warning("The login could not be completed: %s.", detail)
-        reason = "El inicio de sesión automático no se ha podido completar."
     if auto.next_try is None:
-        log.warning("No more automatic logins until the credentials change or a person logs in.")
+        log.warning("No more logins until the credentials are entered again or a person logs in.")
     else:
-        log.info("Next automatic login at %s.", time.strftime("%H:%M", time.localtime(auto.next_try)))
-    return f"{reason} {auto.when()}"
-
-
-def wait_for_login(tab: Tab, auto: AutoLogin = None) -> None:
-    """Get the browser logged in, by itself or by waiting for a person.
-
-    With credentials, the login is tried whenever it is due. A person is
-    asked only once a try has failed, and can log in at any moment. While
-    waiting, the page is only reloaded when it sits on a portal page that
-    should be the consumption page, or on no portal page at all (a failed
-    load), and then at most once a minute.
-    """
-    reason = ""
-    if auto and not auto.due():
-        reason = f"El inicio de sesión automático está en pausa. {auto.when()}"
-    # Nobody is asked while the automatic login is about to try.
-    ask = not auto or bool(reason)
-    notified = False
-    last_try = float("-inf")
-    last_open = time.monotonic()
-    while True:
-        # Not while a person is filling in the form.
-        if auto and auto.due() and not tab.evaluate(TYPED_BY_PERSON_JS):
-            reason = automatic_login(tab, auto)
-            if not reason:
-                return
-            ask, notified = True, False
-            last_try = float("-inf")
-            last_open = time.monotonic()
-        now = time.monotonic()
-        if ask and not notified and now - last_try >= RETRY_INTERVAL:
-            # Asked again every minute while Home Assistant is not reachable.
-            notified = notify_login_needed(reason)
-            last_try = now
-        time.sleep(LOGIN_POLL)
-        now = time.monotonic()
-        url = tab.url()
-        inside = url.startswith(f"{BASE_URL}/group/")
-        if (inside or not url.startswith(BASE_URL)) and now - last_open >= RETRY_INTERVAL:
-            tab.open(CONSUMPTION_URL)
-            last_open = time.monotonic()
-        if inside and tab.logged_in():
-            if auto:
-                auto.reset()  # a person logged in: the refusals are history
-            return
+        log.info("Next login at %s.", time.strftime("%H:%M", time.localtime(auto.next_try)))
+    report_login(entry_id, outcome, detail, auto.next_try)
+    memory["reported"][entry_id] = time.monotonic()
 
 
 def run(browser: subprocess.Popen) -> None:
     tab = Tab()
-    auto = AutoLogin() if LOGIN_DOCUMENT and LOGIN_PASSWORD else None
-    sent = ""
+    # Whose session the browser holds, and when each account's failure was last reported.
+    memory = {"owner": None, "reported": {}}
     try:
-        previous = saved_session()
-        # The login page has already given the new browser a cookie of its
-        # own; the kept one replaces it.
-        if previous and previous != tab.session_cookie():
-            log.info("Restoring the session kept from before the restart.")
-            tab.set_session_cookie(previous)
-        tab.open(CONSUMPTION_URL)
         while browser.poll() is None:
-            if not tab.logged_in():
-                save_session("")
-                if not auto:
-                    log.info("Not logged in. Waiting for a login in the helper browser.")
-                wait_for_login(tab, auto)
-                log.info("Login detected.")
-
-            tab.allow_cookies()
-            cookie = tab.session_cookie()
-            if cookie != saved_session():
-                save_session(cookie)
-
-            # Until the next check of the portal, keep offering the session
-            # to Home Assistant if it did not take it (it may be restarting).
-            next_check = time.monotonic() + CHECK_INTERVAL
-            while True:
-                if cookie and cookie != sent and send_session(cookie):
-                    log.info("Session handed to Home Assistant.")
-                    sent = cookie
-                    dismiss_notification()
-                remaining = next_check - time.monotonic()
-                if remaining <= 0:
-                    break
-                time.sleep(remaining if cookie == sent or not cookie else min(RETRY_INTERVAL, remaining))
-            tab.open(CONSUMPTION_URL)
+            for request in ask_for_work():
+                serve(tab, request, memory)
+            time.sleep(POLL_INTERVAL)
     finally:
         tab.close()
 
 
 def main() -> None:
     global HELPER_URL
-    if bool(LOGIN_DOCUMENT) != bool(LOGIN_PASSWORD):
-        raise SystemExit("Set both CANAL_DOCUMENT and CANAL_PASSWORD (or CANAL_PASSWORD_FILE), or neither")
-    if LOGIN_PROFILE not in PROFILES:
-        raise SystemExit(f"CANAL_PROFILE must be one of: {', '.join(PROFILES)}")
-    if LOGIN_DOCUMENT:
-        log.info("Automatic login is on.")
-    else:
-        log.info("No credentials given: logins are done by hand in the helper browser.")
     if SUPERVISOR_TOKEN and not HELPER_URL:
         HELPER_URL = addon_ingress_url()
+    log.info("Waiting for Home Assistant to want a portal session.")
     while True:
         browser = None
         try:

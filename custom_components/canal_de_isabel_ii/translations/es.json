@@ -3,33 +3,73 @@
     "step": {
       "user": {
         "title": "Canal de Isabel II",
-        "description": "Deja el campo vacío si usas el ayudante de sesión: él entregará la sesión. Si no, inicia sesión en la oficina virtual desde tu navegador y pega el valor de la cookie JSESSIONID.",
+        "description": "Los datos con los que entras en la [oficina virtual]({portal_url}). El inicio de sesión lo hace el ayudante de sesión, que tiene que estar instalado: sin él no se descarga nada.",
         "data": {
-          "jsessionid": "Cookie JSESSIONID (opcional)"
+          "document": "Número de documento",
+          "password": "Contraseña",
+          "profile": "Perfil"
+        },
+        "data_description": {
+          "document": "El NIF o NIE con el que inicias sesión.",
+          "profile": "El perfil que eliges en el formulario de acceso de la oficina virtual."
         }
       },
       "reauth_confirm": {
-        "title": "Hace falta una sesión",
-        "description": "{account} necesita una sesión del portal. Si usas el ayudante de sesión, deja esto abierto: él entrega una sesión nueva por sí mismo, o te avisa si tienes que iniciar sesión en su navegador. Si no, inicia sesión en la oficina virtual con tu navegador y pega aquí la cookie JSESSIONID.",
+        "title": "Credenciales de la oficina virtual",
+        "description": "El ayudante de sesión necesita tu número de documento y tu contraseña de la oficina virtual para iniciar sesión. Si ya los tenía, es que el portal no los ha aceptado: compruébalos y vuelve a escribirlos.{reason}",
         "data": {
-          "jsessionid": "Cookie JSESSIONID"
+          "document": "Número de documento",
+          "password": "Contraseña",
+          "profile": "Perfil"
         }
       }
     },
     "error": {
-      "invalid_auth": "El portal no ha aceptado esta sesión. Comprueba el valor de la cookie y que sigues con la sesión iniciada.",
-      "unknown": "Error inesperado. Revisa los registros.",
-      "cannot_connect": "No se pudo contactar con el portal o respondió de forma inesperada. Inténtalo más tarde."
+      "document_required": "Escribe tu número de documento."
     },
     "abort": {
-      "reauth_successful": "Sesión actualizada.",
-      "already_configured": "Esta sesión ya está configurada."
+      "reauth_successful": "Credenciales guardadas. El ayudante de sesión iniciará sesión en un minuto.",
+      "already_configured": "Esta cuenta ya está configurada."
+    }
+  },
+  "selector": {
+    "profile": {
+      "options": {
+        "particular": "Particular",
+        "empresa": "Empresa",
+        "administrador": "Administrador",
+        "entidad_publica": "Entidades públicas"
+      }
+    }
+  },
+  "issues": {
+    "helper_missing": {
+      "title": "El ayudante de sesión del Canal de Isabel II no responde",
+      "description": "La integración necesita iniciar sesión en la oficina virtual para descargar el consumo, y eso lo hace el ayudante de sesión. Ninguno ha preguntado por trabajo en los últimos minutos.\n\nComprueba que el ayudante está instalado y en marcha y, si es un contenedor Docker, que su `HA_URL` y su token son correctos. Este aviso desaparece cuando el ayudante vuelve a conectar."
+    },
+    "login_challenge": {
+      "title": "El Canal de Isabel II pide una comprobación para iniciar sesión",
+      "description": "El portal ha mostrado una comprobación (captcha) que tiene que resolver una persona. Abre el navegador del ayudante de sesión e inicia sesión a mano.{link}\n\nEl ayudante lo volverá a intentar por su cuenta a las {retry_at}. Este aviso desaparece cuando haya una sesión."
+    },
+    "login_failed": {
+      "title": "No se ha podido iniciar sesión en el Canal de Isabel II",
+      "description": "El ayudante de sesión no ha conseguido iniciar sesión en la oficina virtual: el portal no ha respondido como se esperaba. Puede ser una caída pasajera del portal o un cambio en su página.\n\nEl ayudante lo volverá a intentar a las {retry_at}. Si se repite, abre su navegador para ver qué muestra el portal e inicia sesión a mano.{link}"
     }
   },
   "services": {
+    "session_request": {
+      "name": "Pedir trabajo",
+      "description": "Para el ayudante de sesión: devuelve las entradas que necesitan una sesión del portal, con sus credenciales.",
+      "fields": {
+        "helper_url": {
+          "name": "Dirección del ayudante",
+          "description": "Enlace al navegador del ayudante."
+        }
+      }
+    },
     "set_session": {
-      "name": "Establecer sesión",
-      "description": "Entrega a la integración una nueva sesión del portal e importa los datos al momento. Pensado para herramientas que obtienen la sesión fuera de Home Assistant.",
+      "name": "Entregar sesión",
+      "description": "Para el ayudante de sesión: entrega una sesión del portal. La integración descarga los datos al momento.",
       "fields": {
         "jsessionid": {
           "name": "Cookie JSESSIONID",
@@ -37,7 +77,33 @@
         },
         "entry_id": {
           "name": "Entrada",
-          "description": "Qué entrada de Canal de Isabel II actualizar. Solo hace falta si hay más de una."
+          "description": "A qué entrada de Canal de Isabel II corresponde. Solo hace falta si hay más de una."
+        }
+      }
+    },
+    "report_login": {
+      "name": "Informar de un inicio de sesión fallido",
+      "description": "Para el ayudante de sesión: avisa de que no ha podido iniciar sesión, para que la integración se lo cuente a la persona.",
+      "fields": {
+        "result": {
+          "name": "Resultado",
+          "description": "refused: el portal rechazó las credenciales. challenge: el captcha pide una persona. failed: el portal no respondió como se esperaba."
+        },
+        "entry_id": {
+          "name": "Entrada",
+          "description": "A qué entrada de Canal de Isabel II corresponde. Solo hace falta si hay más de una."
+        },
+        "detail": {
+          "name": "Detalle",
+          "description": "Lo que respondió el portal."
+        },
+        "retry_at": {
+          "name": "Próximo intento",
+          "description": "Cuándo lo volverá a intentar el ayudante (fecha y hora ISO)."
+        },
+        "helper_url": {
+          "name": "Dirección del ayudante",
+          "description": "Enlace al navegador del ayudante."
         }
       }
     }
@@ -54,10 +120,13 @@
   },
   "exceptions": {
     "no_entry": {
-      "message": "No hay ninguna entrada de Canal de Isabel II a la que entregar la sesión."
+      "message": "No hay ninguna entrada de Canal de Isabel II."
     },
     "several_entries": {
       "message": "Canal de Isabel II está configurado más de una vez: indica la entrada con entry_id."
+    },
+    "not_loaded": {
+      "message": "La entrada de Canal de Isabel II no está cargada."
     },
     "session_rejected": {
       "message": "El portal no ha aceptado esta sesión."

@@ -1,84 +1,81 @@
-"""The config and reauth flows, with the portal client replaced."""
-from unittest.mock import patch
-
+"""The config and re-authentication flows: the account of the virtual office."""
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.canal_de_isabel_ii.const import (
-    DOMAIN,
-    SESSION_ERROR,
-    SESSION_EXPIRED,
-    SESSION_OK,
-)
+from custom_components.canal_de_isabel_ii.const import DOMAIN
 
-ANSWERS = {
-    "good": (SESSION_OK, None),
-    "dead": (SESSION_EXPIRED, "HTTP 302 -> /c/portal/login"),
-    "down": (SESSION_ERROR, "HTTP 503"),
-}
+ACCOUNT = {"document": " x1234567l ", "password": "secret", "profile": "particular"}
 
 
-class FakeClient:
-    def __init__(self, jsessionid):
-        self.jsessionid = jsessionid
-
-    def probe(self):
-        return ANSWERS[self.jsessionid]
-
-
-def portal():
-    return patch("custom_components.canal_de_isabel_ii.config_flow.CanalIsabelIIAPI", FakeClient)
-
-
-async def submit(hass, cookie):
+async def submit(hass, answers):
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    return await hass.config_entries.flow.async_configure(result["flow_id"], {"jsessionid": cookie})
+    return await hass.config_entries.flow.async_configure(result["flow_id"], answers)
 
 
-async def test_a_dead_session_and_an_unreachable_portal_are_told_apart(hass):
-    with portal():
-        assert (await submit(hass, "dead"))["errors"] == {"base": "invalid_auth"}
-        assert (await submit(hass, "down"))["errors"] == {"base": "cannot_connect"}
-
-
-async def test_the_same_session_is_not_added_twice(hass):
-    MockConfigEntry(domain=DOMAIN, data={"jsessionid": "good"}).add_to_hass(hass)
-    with portal():
-        result = await submit(hass, "good")
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
-
-
-async def test_reauth_keeps_the_rest_of_the_entry_data(hass):
-    entry = MockConfigEntry(
-        domain=DOMAIN, data={"jsessionid": "old", "history_imported": True}
-    )
-    entry.add_to_hass(hass)
-    with portal(), patch.object(hass.config_entries, "async_reload", return_value=True):
-        result = await entry.start_reauth_flow(hass)
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"jsessionid": "good"}
-        )
-    assert result["reason"] == "reauth_successful"
-    assert entry.data["jsessionid"] == "good"
-    assert entry.data["history_imported"] is True
-
-
-async def test_adding_without_a_cookie_waits_for_a_session(hass):
-    with portal():
-        result = await submit(hass, "")
+async def test_the_account_is_stored_and_the_entry_waits_for_the_helper(hass):
+    result = await submit(hass, ACCOUNT)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
 
     entry = hass.config_entries.async_entries(DOMAIN)[0]
-    assert entry.data["jsessionid"] == ""
-    # It asks for a session instead of loading.
-    assert entry.state is config_entries.ConfigEntryState.SETUP_ERROR
-    assert hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert entry.data["document"] == "X1234567L"
+    assert entry.data["password"] == "secret"
+    assert entry.data["profile"] == "particular"
+    assert entry.data["credentials_set_at"]
+    # Loaded without any session: it asks the helper for one.
+    assert entry.state is config_entries.ConfigEntryState.LOADED
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)
 
-    # Only one entry can be waiting for its first session.
-    with portal():
-        assert (await submit(hass, ""))["reason"] == "already_configured"
+
+async def test_the_same_account_is_not_added_twice(hass):
+    await submit(hass, ACCOUNT)
+    result = await submit(hass, {**ACCOUNT, "document": "X1234567L"})
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+
+
+async def test_an_empty_document_is_asked_again(hass):
+    result = await submit(hass, {**ACCOUNT, "document": "  "})
+    assert result["errors"] == {"document": "document_required"}
+
+
+async def test_reauth_keeps_the_rest_of_the_entry_data(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        data={**ACCOUNT, "document": "X1234567L", "credentials_set_at": "before", "history_imported": True},
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass, data={"detail": "Usuario o contraseña incorrectos"})
+    assert result["description_placeholders"]["reason"].endswith("«Usuario o contraseña incorrectos»")
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**ACCOUNT, "password": "new"}
+    )
+    await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["password"] == "new"
+    assert entry.data["history_imported"] is True
+    # Entering the credentials again tells the helper to try again.
+    assert entry.data["credentials_set_at"] != "before"
+
+
+async def test_an_entry_from_before_the_credentials_asks_for_them(hass):
+    entry = MockConfigEntry(domain=DOMAIN, version=1, data={"jsessionid": "old", "history_imported": True})
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.version == 2
+    assert entry.state is config_entries.ConfigEntryState.SETUP_ERROR
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["context"]["source"] for flow in flows] == ["reauth"]
+
+    result = await hass.config_entries.flow.async_configure(flows[0]["flow_id"], ACCOUNT)
+    await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+    assert entry.state is config_entries.ConfigEntryState.LOADED
+    assert entry.data["history_imported"] is True

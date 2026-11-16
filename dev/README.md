@@ -8,8 +8,20 @@ User documentation is in the [main README](../README.md) (integration) and in [`
 |---|---|
 | `custom_components/canal_de_isabel_ii/` | The integration. `csv_parser.py`, `statistics_helpers.py` and `meter_parser.py` have no Home Assistant imports and are tested on their own. |
 | `canal-session-helper/` | The session helper: one image, used as a plain container and as a Home Assistant add-on (`config.yaml`). |
-| `tests/` | Unit tests; `tests/ha/` runs the integration inside a real Home Assistant with a fake portal; `tests/helper/` runs the session helper's image against a fake portal. |
+| `tests/` | Unit tests; `tests/ha/` runs the integration inside a real Home Assistant with a fake portal; `tests/helper/` runs the session helper's image against a fake portal and a fake integration. |
 | `dev/` | The tools below. |
+
+## How the two halves talk
+
+The helper is a client of Home Assistant and nothing calls it, so it needs no address or port known to Home Assistant, as an app or as a container. The integration keeps, per entry, whether a portal session is wanted (a fetch is due and the stored session is missing or was rejected). The helper calls three admin services:
+
+| Service | When | What the integration does |
+|---|---|---|
+| `session_request` (returns a response) | every minute | answers with the entries that want a session and their credentials; notes that a helper is alive |
+| `set_session` | after a login | checks the cookie against the portal, stores it and fetches |
+| `report_login` | when a login did not work | `refused` starts the re-authentication flow and stops offering those credentials; `challenge` and `failed` raise a repair issue |
+
+No session is kept alive: a fetch that finds the session gone asks for a new one and keeps the previous data meanwhile. The helper's retry limits live in the helper (`/data/login_state`), so that neither a restart of it nor of Home Assistant can repeat a refused password.
 
 ## Tests
 
@@ -37,16 +49,17 @@ A throwaway Home Assistant in Docker with the working copy of the integration mo
 
 ```sh
 docker compose -f dev/docker-compose.yml up -d     # http://localhost:18123, user dev / dev-dev-dev
-echo "<JSESSIONID>" | python3 dev/dev.py setup     # first time: creates the user and adds the integration
-echo "<JSESSIONID>" | python3 dev/dev.py session   # later: hand it a fresh session
+printf '%s\n%s\n' "<document>" "<password>" | python3 dev/dev.py setup   # first time: creates the user and adds the integration
+python3 dev/dev.py wanted                          # what a session helper would be asked to do
+echo "<JSESSIONID>" | python3 dev/dev.py session   # deliver a session by hand, as the helper does
 python3 dev/dev.py status                          # entry state, sensors, stored statistics
 docker compose -f dev/docker-compose.yml restart   # pick up code changes
 docker compose -f dev/docker-compose.yml stop      # when done
 ```
 
-- The cookie can be the one another Home Assistant is using: the portal accepts the same session from several clients.
-- Stop the container when you are not testing. While it runs it checks the session every 10 minutes like any other install.
-- State lives in `dev/config`, which git ignores. It holds the session cookie and your consumption data; delete the folder to start over.
+- Without a session helper pointed at it, the instance only gets data from `dev.py session`. The cookie can be the one another Home Assistant is using: the portal accepts the same session from several clients.
+- A helper pointed at it logs in to the real portal with the credentials given to `setup`.
+- State lives in `dev/config`, which git ignores. It holds the credentials, the session cookie and your consumption data; delete the folder to start over.
 
 ## A local Home Assistant OS, for the add-on
 

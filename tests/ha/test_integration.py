@@ -8,7 +8,8 @@ from homeassistant.components.recorder.statistics import statistics_during_perio
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.helpers import issue_registry as ir
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
@@ -16,6 +17,8 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 from custom_components.canal_de_isabel_ii.api import AuthError, PortalData, PortalError
 from custom_components.canal_de_isabel_ii.const import (
     DOMAIN,
+    HELPER_TIMEOUT,
+    HELPER_WATCH_INTERVAL,
     HISTORY_DAYS,
     REFRESH_DAYS,
     SESSION_EXPIRED,
@@ -58,9 +61,6 @@ class FakePortal:
     def __init__(self, jsessionid):
         self.jsessionid = jsessionid
 
-    def check_auth(self):
-        return self.jsessionid in self.valid_sessions
-
     def probe(self):
         if self.jsessionid not in self.valid_sessions:
             return SESSION_EXPIRED, "HTTP 302 -> /c/portal/login"
@@ -87,13 +87,34 @@ def portal():
         yield FakePortal
 
 
+ACCOUNT = {
+    "document": "X1234567L",
+    "password": "secret",
+    "profile": "particular",
+    "credentials_set_at": "2026-11-16T00:00:00+00:00",
+}
+
+
 async def setup_entry(hass, jsessionid="good"):
-    entry = MockConfigEntry(domain=DOMAIN, data={"jsessionid": jsessionid})
+    """An entry with its account and, unless empty, a session delivered earlier."""
+    entry = MockConfigEntry(domain=DOMAIN, version=2, data={**ACCOUNT, "jsessionid": jsessionid})
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     await async_wait_recording_done(hass)
     return entry
+
+
+async def helper_asks(hass, **data):
+    """What the session helper does every minute."""
+    answer = await hass.services.async_call(
+        DOMAIN, "session_request", data, blocking=True, return_response=True
+    )
+    return answer["requests"]
+
+
+def issues(hass):
+    return {issue.issue_id: issue for issue in ir.async_get(hass).issues.values() if issue.domain == DOMAIN}
 
 
 async def stored_statistics(hass):
@@ -127,7 +148,7 @@ async def test_setup_imports_statistics_and_creates_sensors(recorder_mock, hass,
 
 async def test_overlapping_refresh_continues_the_series(recorder_mock, hass, portal):
     entry = await setup_entry(hass)
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
 
     # The next download has slid forward: hours 1-4 instead of 0-2.
     portal.data = PortalData(readings=readings(1, [20, 30, 40, 50]), meter=None)
@@ -148,7 +169,7 @@ async def test_overlapping_refresh_continues_the_series(recorder_mock, hass, por
 
 async def test_first_download_asks_for_the_history_then_a_short_window(recorder_mock, hass, portal):
     entry = await setup_entry(hass)
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -159,7 +180,7 @@ async def test_older_history_is_merged_before_existing_rows(recorder_mock, hass,
     # An install that already holds hours 2-4 and then receives hours 0-4.
     portal.data = PortalData(readings=readings(2, [30, 40, 50]), meter=METER)
     entry = await setup_entry(hass)
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
     assert await stored_statistics(hass) == [(30.0, 30.0), (40.0, 70.0), (50.0, 120.0)]
 
     portal.data = PortalData(readings=readings(0, [10, 20, 30, 40, 50]), meter=None)
@@ -178,12 +199,12 @@ async def test_older_history_is_merged_before_existing_rows(recorder_mock, hass,
 async def test_portal_error_at_setup_still_loads_and_recovers(recorder_mock, hass, portal):
     portal.broken = True
     entry = await setup_entry(hass)
-    # Loaded, so the session keeps its keep-alive and nothing hammers the portal.
+    # Loaded: the fetch is tried again later and nothing hammers the portal.
     assert entry.state is ConfigEntryState.LOADED
     assert hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption") is None
 
     portal.broken = False
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -196,7 +217,7 @@ async def test_portal_error_at_setup_still_loads_and_recovers(recorder_mock, has
 async def test_history_is_asked_again_when_the_range_was_not_applied(recorder_mock, hass, portal):
     portal.data = PortalData(readings=readings(0, [10]), meter=None, range_applied=False)
     entry = await setup_entry(hass)
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -223,43 +244,131 @@ async def test_old_total_entity_is_removed(recorder_mock, hass, portal):
     assert registry.async_get(old.entity_id) is None
 
 
-async def test_rejected_session_asks_for_reauth(recorder_mock, hass, portal):
-    entry = await setup_entry(hass, jsessionid="dead")
-    assert entry.state is ConfigEntryState.SETUP_ERROR
-    assert any(flow["context"]["source"] == "reauth" for flow in hass.config_entries.flow.async_progress())
+async def test_without_a_session_the_helper_is_asked_for_one(recorder_mock, hass, portal):
+    entry = await setup_entry(hass, jsessionid="")
+    assert entry.state is ConfigEntryState.LOADED
+    assert portal.requested_days == []
+    assert not hass.config_entries.flow.async_progress()
 
-    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
-    assert diagnostics["sessions"][-1]["failed_at"] is not None
-    assert "dead" not in str(diagnostics)
+    assert await helper_asks(hass) == [{"entry_id": entry.entry_id, **ACCOUNT}]
 
-
-async def test_set_session_replaces_a_dead_session(recorder_mock, hass, portal):
-    entry = await setup_entry(hass, jsessionid="dead")
-    assert entry.state is ConfigEntryState.SETUP_ERROR
-
-    await hass.services.async_call(DOMAIN, "set_session", {"jsessionid": "good"}, blocking=True)
+    await hass.services.async_call(
+        DOMAIN, "set_session", {"jsessionid": "good", "entry_id": entry.entry_id}, blocking=True
+    )
     await hass.async_block_till_done()
 
     assert entry.data["jsessionid"] == "good"
-    assert entry.state is ConfigEntryState.LOADED
-    assert not hass.config_entries.flow.async_progress()
     assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0)]
+    consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption")
+    assert float(consumption.state) == 30.0
+    # Served: nothing is wanted until the next fetch finds the session gone.
+    assert await helper_asks(hass) == []
 
 
-async def test_set_session_completes_an_entry_added_without_a_cookie(recorder_mock, hass, portal):
-    entry = await setup_entry(hass, jsessionid="")
-    assert entry.state is ConfigEntryState.SETUP_ERROR
+async def test_an_ended_session_is_replaced_without_bothering_anyone(recorder_mock, hass, portal):
+    entry = await setup_entry(hass)
+    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
+    assert await helper_asks(hass) == []
 
-    await hass.services.async_call(DOMAIN, "set_session", {"jsessionid": "good"}, blocking=True)
-    await hass.async_block_till_done()
+    # By the next fetch the portal has ended the session, as it always does.
+    with patch.object(portal, "valid_sessions", {"better"}):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
 
-    assert entry.state is ConfigEntryState.LOADED
-    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)
-    assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0)]
+        # The sensors keep their values, nobody is asked to do anything...
+        consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption")
+        assert float(consumption.state) == 30.0
+        assert coordinator.last_update_success
+        assert not hass.config_entries.flow.async_progress()
+        assert not issues(hass)
+        # ...and the helper is asked for a new session.
+        assert [request["entry_id"] for request in await helper_asks(hass)] == [entry.entry_id]
+
+        portal.data = PortalData(readings=readings(1, [20, 30, 40]), meter=None)
+        await hass.services.async_call(DOMAIN, "set_session", {"jsessionid": "better"}, blocking=True)
+        await hass.async_block_till_done()
+
+    assert entry.data["jsessionid"] == "better"
+    assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0), (40.0, 100.0)]
+    assert await helper_asks(hass) == []
+
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+    assert [bool(session["failed_at"]) for session in diagnostics["sessions"]] == [True, False]
+    assert "secret" not in str(diagnostics) and "better" not in str(diagnostics)
 
 
 async def test_set_session_rejects_an_invalid_cookie(recorder_mock, hass, portal):
-    entry = await setup_entry(hass)
+    entry = await setup_entry(hass, jsessionid="")
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(DOMAIN, "set_session", {"jsessionid": "bogus"}, blocking=True)
-    assert entry.data["jsessionid"] == "good"
+    assert entry.data["jsessionid"] == ""
+    assert len(await helper_asks(hass)) == 1
+
+
+async def test_a_refused_login_asks_for_the_credentials_again(recorder_mock, hass, portal):
+    entry = await setup_entry(hass, jsessionid="")
+    await hass.services.async_call(
+        DOMAIN,
+        "report_login",
+        {"entry_id": entry.entry_id, "result": "refused", "detail": "Usuario o contraseña incorrectos"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["context"]["source"] for flow in flows] == ["reauth"]
+    # The helper is not given the refused credentials again.
+    assert await helper_asks(hass) == []
+
+    await hass.config_entries.flow.async_configure(
+        flows[0]["flow_id"], {"document": "X1234567L", "password": "right", "profile": "particular"}
+    )
+    await hass.async_block_till_done()
+    requests = await helper_asks(hass)
+    assert [request["password"] for request in requests] == ["right"]
+    assert requests[0]["credentials_set_at"] != ACCOUNT["credentials_set_at"]
+
+
+@pytest.mark.parametrize("result", ["challenge", "failed"])
+async def test_a_login_that_needs_a_person_is_a_repair_issue(recorder_mock, hass, portal, result):
+    entry = await setup_entry(hass, jsessionid="")
+    await hass.services.async_call(
+        DOMAIN,
+        "report_login",
+        {
+            "entry_id": entry.entry_id,
+            "result": result,
+            "retry_at": "2026-11-16T12:00:00+00:00",
+            "helper_url": "http://helper.example/",
+        },
+        blocking=True,
+    )
+    issue = issues(hass)[f"login_needs_a_person_{entry.entry_id}"]
+    assert issue.translation_key == f"login_{result}"
+    assert "http://helper.example/" in issue.translation_placeholders["link"]
+    assert not hass.config_entries.flow.async_progress()
+    # The helper keeps being asked: it retries by itself.
+    assert len(await helper_asks(hass)) == 1
+
+    await hass.services.async_call(DOMAIN, "set_session", {"jsessionid": "good"}, blocking=True)
+    await hass.async_block_till_done()
+    assert not issues(hass)
+
+
+async def test_a_missing_helper_is_a_repair_issue(recorder_mock, hass, portal, freezer):
+    await setup_entry(hass, jsessionid="")
+    freezer.tick(HELPER_TIMEOUT + HELPER_WATCH_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert "helper_missing" in issues(hass)
+
+    await helper_asks(hass)
+    assert not issues(hass)
+
+
+async def test_no_issue_while_nothing_is_wanted(recorder_mock, hass, portal, freezer):
+    await setup_entry(hass)
+    freezer.tick(HELPER_TIMEOUT + HELPER_WATCH_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert not issues(hass)

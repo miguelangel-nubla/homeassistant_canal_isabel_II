@@ -60,7 +60,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the sensor platform."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id].coordinator
     registry = er.async_get(hass)
     with_consumption: set = set()
     with_meter: set = set()

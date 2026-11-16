@@ -3,24 +3,12 @@
 # port 6080) and the helper that runs the browser.
 set -eu
 
-# As a Home Assistant add-on: the Supervisor gives the API token, ingress
-# does the authentication, and the options come from /data/options.json.
+# As a Home Assistant app (add-on): the Supervisor gives the API token and
+# ingress does the authentication. There is nothing to configure.
 if [ -n "${SUPERVISOR_TOKEN:-}" ] && [ -z "${HELPER_ADDON_READY:-}" ]; then
     export HA_URL="http://supervisor/core"
     export HA_TOKEN="$SUPERVISOR_TOKEN"
     export VNC_NO_PASSWORD="true"
-    if [ -r /data/options.json ]; then
-        eval "$(python3 - <<'PY'
-import json, shlex
-options = json.load(open("/data/options.json"))
-print("export CHECK_INTERVAL=" + shlex.quote(str(options.get("check_interval", 600))))
-print("export HA_ENTRY_ID=" + shlex.quote(str(options.get("entry_id") or "")))
-print("export CANAL_DOCUMENT=" + shlex.quote(str(options.get("document") or "")))
-print("export CANAL_PASSWORD=" + shlex.quote(str(options.get("password") or "")))
-print("export CANAL_PROFILE=" + shlex.quote(str(options.get("profile") or "")))
-PY
-)"
-    fi
     export HELPER_ADDON_READY=1
 fi
 
@@ -32,8 +20,7 @@ if [ "$(id -u)" = "0" ]; then
     exec setpriv --reuid helper --regid helper --init-groups env HOME=/home/helper "$0" "$@"
 fi
 
-# Each secret may be given directly or as a file (VNC_PASSWORD_FILE,
-# HA_TOKEN_FILE, CANAL_PASSWORD_FILE; the helper reads the last two).
+# Each secret may be given directly or as a file (VNC_PASSWORD_FILE, HA_TOKEN_FILE).
 if [ -z "${VNC_PASSWORD:-}" ] && [ -n "${VNC_PASSWORD_FILE:-}" ]; then
     VNC_PASSWORD="$(head -n 1 "$VNC_PASSWORD_FILE")"
 fi
