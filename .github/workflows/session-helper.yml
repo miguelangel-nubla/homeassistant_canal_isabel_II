@@ -37,10 +37,25 @@ jobs:
         env:
           TAG: ${{ github.event.release.tag_name }}
         run: echo "value=${TAG#v}" >> "$GITHUB_OUTPUT"
+      # One description for the add-on store and for the image: the one in
+      # the add-on's config.yaml.
+      - id: about
+        run: |
+          echo "title=$(sed -n 's/^name: //p' canal-session-helper/config.yaml)" >> "$GITHUB_OUTPUT"
+          echo "description=$(sed -n 's/^description: //p' canal-session-helper/config.yaml)" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v5
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ghcr.io/${{ github.repository_owner }}/canal-session-helper
+          labels: |
+            org.opencontainers.image.title=${{ steps.about.outputs.title }}
+            org.opencontainers.image.description=${{ steps.about.outputs.description }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/blob/main/canal-session-helper/DOCS.md
+          annotations: |
+            org.opencontainers.image.title=${{ steps.about.outputs.title }}
+            org.opencontainers.image.description=${{ steps.about.outputs.description }}
           # A release is tagged with its version: the Home Assistant add-on
           # pulls the image whose tag equals the add-on version.
           tags: |
@@ -55,6 +70,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
 
   addon-repository:
     # Tell the add-on repository that a new version exists. Needs the secret

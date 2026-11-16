@@ -120,7 +120,7 @@ class CanalIsabelIIConsumptionSensor(_ContractSensor):
 
     def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
         super().__init__(coordinator, contract_id)
-        self._attr_name = "Consumption"
+        self._attr_translation_key = "consumption"
         self._attr_unique_id = f"canal_ii_consumption_{contract_id}"
         self._attr_native_unit_of_measurement = UnitOfVolume.LITERS
         self._attr_device_class = SensorDeviceClass.VOLUME
@@ -158,7 +158,7 @@ class CanalIsabelIIMeterReadingSensor(_ContractSensor):
 
     def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
         super().__init__(coordinator, contract_id)
-        self._attr_name = "Meter reading"
+        self._attr_translation_key = "meter_reading"
         self._attr_unique_id = f"canal_ii_meter_{contract_id}"
         self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
         self._attr_device_class = SensorDeviceClass.WATER

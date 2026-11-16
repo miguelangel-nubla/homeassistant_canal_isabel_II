@@ -98,13 +98,14 @@ def send_session(jsessionid: str) -> bool:
 
 
 def notify_login_needed() -> bool:
-    where = f"[Open the helper browser]({HELPER_URL})" if HELPER_URL else "Open the helper browser"
+    # Shown to the person in Home Assistant, whose users are Spanish speakers.
+    where = f"[Abre el navegador del ayudante]({HELPER_URL})" if HELPER_URL else "Abre el navegador del ayudante"
     return call_ha(
         "persistent_notification/create",
         {
             "notification_id": NOTIFICATION_ID,
-            "title": "Canal de Isabel II: login needed",
-            "message": f"There is no active portal session. {where} and log in to the virtual office.",
+            "title": "Canal de Isabel II: hay que iniciar sesión",
+            "message": f"No hay ninguna sesión activa en la oficina virtual. {where} e inicia sesión.",
         },
     )
 

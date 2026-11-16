@@ -1,78 +1,82 @@
 # Canal de Isabel II para Home Assistant
 
-Componente para integrar los datos de consumo de agua del Canal de Isabel II en Home Assistant.
+Integración que lleva a Home Assistant el consumo de agua de tu contrato del [Canal de Isabel II](https://oficinavirtual.canaldeisabelsegunda.es/) (Madrid): el consumo hora a hora, listo para el panel de Energía, y la lectura del contador.
 
-## Características
+El Canal no ofrece una API pública. La integración lee los datos de la oficina virtual con la sesión de un navegador en el que tú has iniciado sesión.
 
--   Descarga el consumo horario de agua.
--   Importa el histórico como estadística de Home Assistant, lista para el panel de Energía.
--   Crea sensores con el último consumo horario y la lectura del contador.
+## Qué obtienes
+
+Por cada contrato:
+
+| Qué | Dónde | Para qué |
+|-----|---------------|----------|
+| Estadística horaria | `canal_de_isabel_ii:consumption_<contrato>` | Histórico de consumo en litros. Es la que se añade al panel de Energía. |
+| Sensor **Consumo** | en el dispositivo `Canal de Isabel II <contrato>` | Litros de la última hora publicada por el Canal. |
+| Sensor **Lectura del contador** | en el mismo dispositivo | Lectura absoluta en m³, la cifra que aparece en la factura. |
+
+El Canal publica los datos con medio día o un día de retraso, así que no es un contador en tiempo real.
 
 ## Instalación
-
-### Marketplace de Home Assistant (recomendado)
 
 Desde Home Assistant 2026.11, HACS viene integrado como **Marketplace** (**Ajustes > Marketplace**). En versiones anteriores los mismos pasos se hacen desde HACS.
 
 [![Abrir el repositorio en el Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=miguelangel-nubla&repository=homeassistant_canal_isabel_II&category=integration)
 
-1.  Pulsa el botón de arriba, o abre el Marketplace, elige **Repositorios personalizados** en el menú de los tres puntos y añade `https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II` con la categoría **Integración**.
-2.  Busca **Canal de Isabel II** y descárgala.
-3.  Reinicia Home Assistant.
+1. Pulsa el botón, o abre el Marketplace, elige **Repositorios personalizados** en el menú de los tres puntos y añade `https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II` con la categoría **Integración**.
+2. Busca **Canal de Isabel II** y descárgala.
+3. Reinicia Home Assistant.
 
-### Instalación Manual
-
-1.  Descarga la carpeta `custom_components/canal_de_isabel_ii` de este repositorio.
-2.  Cópiala en tu carpeta `config/custom_components/`.
-3.  Reinicia Home Assistant.
+Instalación manual: copia la carpeta `custom_components/canal_de_isabel_ii` de este repositorio en `config/custom_components/` y reinicia.
 
 ## Configuración
 
-1.  Ve a **Ajustes > Dispositivos y Servicios**.
-2.  Dale a **Añadir integración**.
-3.  Busca **Canal de Isabel II**.
-4.  Te pedirá el `JSESSIONID`. Para sacarlo:
-    1.  Entra en la [oficina virtual](https://oficinavirtual.canaldeisabelsegunda.es/) con tu navegador e inicia sesión.
-    2.  Pulsa F12 para abrir la consola de desarrollador.
-    3.  Ve a la pestaña **Aplicación** > **Cookies** (o *Storage > Cookies* según el navegador).
-    4.  Busca la cookie llamada `JSESSIONID` y copia su valor.
+1. Inicia sesión en la [oficina virtual](https://oficinavirtual.canaldeisabelsegunda.es/) con tu navegador.
+2. Abre las herramientas de desarrollador (F12) y ve a **Aplicación > Cookies** (*Almacenamiento > Cookies* en Firefox).
+3. Copia el valor de la cookie `JSESSIONID`.
+4. En Home Assistant, ve a **Ajustes > Dispositivos y servicios > Añadir integración**, busca **Canal de Isabel II** y pega el valor.
 
-> [!WARNING]
-> **Caducidad de la sesión:** `JSESSIONID` es una cookie de sesión temporal emitida por el servidor web del Canal de Isabel II y **caduca aproximadamente cada hora** (o cuando se cierra la sesión en la web). Cuando caduque, Home Assistant te pedirá re-autenticarte introduciendo la nueva cookie.
+La primera descarga trae el último año de consumo horario. Después la integración vuelve a leer los últimos 30 días dos veces al día, de modo que las horas publicadas con retraso se rellenan solas.
 
-## Datos y panel de Energía
+### Cuando la sesión caduca
 
-Por cada contrato se crean:
+La cookie es una sesión temporal del portal. La integración la mantiene viva con una comprobación cada 10 minutos, pero el portal acaba cerrándola y no documenta cuándo. Cuando ocurre, Home Assistant pide una sesión nueva. Hay dos formas de dársela:
 
-| Qué | Identificador | Para qué |
-|-----|---------------|----------|
-| Estadística horaria | `canal_de_isabel_ii:consumption_<contrato>` | Histórico de consumo en litros. Es la que se añade al panel de Energía. |
-| Sensor de último consumo | `sensor.canal_de_isabel_ii_<contrato>_consumption` (en instalaciones anteriores conserva su identificador) | Litros de la última hora publicada por el Canal. |
-| Sensor de lectura del contador | `sensor.canal_de_isabel_ii_<contrato>_meter_reading` | Lectura absoluta en m³, la cifra que aparece en la factura. |
+- **A mano:** repite los pasos de arriba y pega la cookie nueva en el aviso de reautenticación.
+- **Con el ayudante de sesión:** un navegador que se ejecuta en tu servidor, o como complemento de Home Assistant. Inicias sesión en él y él entrega la sesión, la vigila y te avisa cuando hay que volver a entrar. Está en [`canal-session-helper`](canal-session-helper/DOCS.md).
 
-Para añadirlo al panel de Energía: **Ajustes > Paneles > Energía > Consumo de agua > Añadir fuente de agua** y elige la estadística **Canal de Isabel II `<contrato>`**.
+En ningún caso se guardan ni se envían tu usuario y tu contraseña: el inicio de sesión lo haces siempre tú.
+
+## Panel de Energía
+
+**Ajustes > Paneles > Energía > Consumo de agua > Añadir fuente de agua** y elige la estadística **Canal de Isabel II `<contrato>`**.
 
 Cada importación continúa la serie guardada, así que volver a descargar las mismas horas no duplica ni descuadra nada.
 
-La primera descarga pide el último año completo de consumo horario; las siguientes, los últimos 30 días, de modo que las horas publicadas con retraso o una temporada sin sesión se rellenan solas.
+> [!IMPORTANT]
+> **Si actualizas desde una versión anterior a 2026.11:** el histórico ya no se guarda en el sensor `Canal de Isabel II Total`, que se elimina. Tienes que volver a elegir la fuente de agua en el panel de Energía. Las estadísticas antiguas de ese sensor se pueden borrar desde **Herramientas para desarrolladores > Estadísticas**.
 
-Limitaciones conocidas:
+## Limitaciones conocidas
 
 - Si la cuenta tiene varios contratos, solo se lee el que el portal muestra seleccionado.
 - La noche del cambio de hora de otoño el portal publica una sola fila para las dos horas que se llaman 02:00. En Home Assistant esa fila queda en una hora y la siguiente aparece vacía.
 
-> [!IMPORTANT]
-> **Si actualizas desde una versión anterior:** el histórico ya no se guarda en el sensor `Canal de Isabel II Total`, que se elimina. Tienes que volver a elegir la fuente de agua en el panel de Energía. Las estadísticas antiguas de ese sensor se pueden borrar desde **Herramientas para desarrolladores > Estadísticas**.
+## Referencia
 
-## Entregar la sesión sin la interfaz
+### Servicio `canal_de_isabel_ii.set_session`
 
-El servicio `canal_de_isabel_ii.set_session` recibe una cookie `JSESSIONID`, la valida, la guarda e importa los datos al momento. Sirve para que otra herramienta entregue la sesión en lugar de pegarla en el formulario de reautenticación.
+Recibe una cookie `JSESSIONID`, la comprueba con el portal, la guarda e importa los datos al momento. Solo lo pueden llamar administradores. Es lo que usa el ayudante de sesión, y sirve para cualquier otra herramienta que obtenga la sesión fuera de Home Assistant.
 
-La carpeta [`canal-session-helper`](canal-session-helper/) contiene un contenedor opcional que lo usa: un navegador en tu servidor en el que inicias sesión tú, y que a partir de ahí entrega y vigila la sesión. También se puede instalar como complemento (add-on) de Home Assistant.
+| Campo | |
+|-------|---|
+| `jsessionid` | Valor de la cookie. |
+| `entry_id` | Opcional. Solo si la integración está añadida más de una vez. |
 
-## Diagnóstico de la sesión
+### Diagnóstico de la sesión
 
-La integración registra cuánto dura cada sesión: cuándo se configuró, la última comprobación correcta y el momento en que el portal la rechazó. Se puede consultar con **Descargar diagnósticos** en la página de la integración. La cookie nunca se incluye.
+La integración registra cuánto dura cada sesión: cuándo se configuró, la última comprobación correcta y el momento en que el portal la rechazó. Se consulta con **Descargar diagnósticos** en la página de la integración. La cookie nunca se incluye.
 
-> [!NOTE]
-> Dada la web actual del Canal de Isabel II y la interfaz que utiliza, actualmente se requiere este método manual. Tampoco hay API pública conocida. Si alguien conoce una alternativa mejor o es capaz de obtener una API oficial/login automático, por favor házmelo saber abriendo una issue.
+## Desarrollo
+
+Las pruebas, la instancia local de Home Assistant y la máquina virtual para probar el complemento están descritas en [`dev/README.md`](dev/README.md).
+
+Si conoces una API oficial o una forma mejor de obtener los datos, abre una [issue](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues).

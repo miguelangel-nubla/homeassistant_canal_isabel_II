@@ -60,9 +60,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             entries = [entry for entry in entries if entry.entry_id == entry_id]
         if len(entries) != 1:
             raise ServiceValidationError(
-                "No matching Canal de Isabel II entry"
-                if not entries
-                else "Several Canal de Isabel II entries exist: pass entry_id"
+                translation_domain=DOMAIN,
+                translation_key="no_entry" if not entries else "several_entries",
             )
         entry = entries[0]
         jsessionid = call.data[CONF_JSESSIONID]
@@ -70,9 +69,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         if jsessionid != entry.data.get(CONF_JSESSIONID):
             state, detail = await hass.async_add_executor_job(CanalIsabelIIAPI(jsessionid).probe)
             if state == SESSION_EXPIRED:
-                raise ServiceValidationError("The portal did not accept this session")
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="session_rejected"
+                )
             if state != SESSION_OK:
-                raise ServiceValidationError(f"The session could not be checked with the portal: {detail}")
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="portal_unreachable",
+                    translation_placeholders={"detail": str(detail)},
+                )
             hass.config_entries.async_update_entry(
                 entry,
                 data={
