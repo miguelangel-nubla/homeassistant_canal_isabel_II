@@ -23,6 +23,11 @@ BASE_URL = "https://oficinavirtual.canaldeisabelsegunda.es"
 CONSUMPTION_URL = f"{BASE_URL}/group/ovir/consumo"
 CDP = "http://127.0.0.1:9222"
 PROFILE_DIR = "/data/profile"
+# The portal's cookie is a session cookie, which Chromium forgets when it
+# closes. A copy is kept here so a restart of the container or the browser
+# does not ask for a new login while the portal still accepts the session.
+SESSION_FILE = "/data/session"
+RETRY_INTERVAL = 60
 NOTIFICATION_ID = "canal_de_isabel_ii_login_needed"
 
 HA_URL = os.environ["HA_URL"].rstrip("/")
@@ -199,6 +204,41 @@ class Tab:
         cookies = self._call("Network.getCookies", {"urls": [BASE_URL]})["cookies"]
         return next((c["value"] for c in cookies if c["name"] == "JSESSIONID"), "")
 
+    def set_session_cookie(self, value: str) -> None:
+        self._call(
+            "Network.setCookie",
+            {
+                "name": "JSESSIONID",
+                "value": value,
+                "url": BASE_URL,
+                "path": "/",
+                "secure": True,
+                "httpOnly": True,
+            },
+        )
+
+
+def saved_session() -> str:
+    try:
+        with open(SESSION_FILE, encoding="utf-8") as file:
+            return file.read().strip()
+    except OSError:
+        return ""
+
+
+def save_session(cookie: str) -> None:
+    """Keep (or with an empty value, forget) the session for the next start."""
+    try:
+        if not cookie:
+            if os.path.exists(SESSION_FILE):
+                os.remove(SESSION_FILE)
+            return
+        descriptor = os.open(SESSION_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+            file.write(cookie)
+    except OSError as err:
+        log.warning("Could not update %s: %s", SESSION_FILE, err)
+
 
 def wait_for_login(tab: Tab) -> None:
     """Leave the page alone until a person has logged in."""
@@ -217,22 +257,37 @@ def run(browser: subprocess.Popen) -> None:
     tab = Tab()
     sent = ""
     try:
+        previous = saved_session()
+        # The login page has already given the new browser a cookie of its
+        # own; the kept one replaces it.
+        if previous and previous != tab.session_cookie():
+            log.info("Restoring the session kept from before the restart.")
+            tab.set_session_cookie(previous)
         tab.open(CONSUMPTION_URL)
         while browser.poll() is None:
             if not tab.logged_in():
+                save_session("")
                 log.info("Not logged in. Waiting for a login in the helper browser.")
                 notify_login_needed()
                 wait_for_login(tab)
                 log.info("Login detected.")
 
             cookie = tab.session_cookie()
-            if cookie and cookie != sent:
-                if send_session(cookie):
+            if cookie != saved_session():
+                save_session(cookie)
+
+            # Until the next check of the portal, keep offering the session
+            # to Home Assistant if it did not take it (it may be restarting).
+            next_check = time.monotonic() + CHECK_INTERVAL
+            while True:
+                if cookie and cookie != sent and send_session(cookie):
                     log.info("Session handed to Home Assistant.")
                     sent = cookie
                     dismiss_notification()
-
-            time.sleep(CHECK_INTERVAL)
+                remaining = next_check - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(remaining if cookie == sent or not cookie else min(RETRY_INTERVAL, remaining))
             tab.open(CONSUMPTION_URL)
     finally:
         tab.close()
