@@ -77,6 +77,9 @@ def logs_in_and_again_when_the_session_ends(start, state) -> None:
     assert second["jsessionid"] in state.sessions and second != first, second
 
     assert len(state.login_posts) == 2, state.login_posts
+    # The cookie dialog was answered with "allow all", once.
+    assert [post["cookie_consent"] for post in state.login_posts] == ["all", "all"], state.login_posts
+    assert helper.logs().count("Cookie dialog answered") == 1, helper.logs()
     assert not state.calls(NOTIFY), state.calls(NOTIFY)
     assert fake_portal.PASSWORD not in helper.logs()
 

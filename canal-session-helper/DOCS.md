@@ -15,6 +15,8 @@ La sesión se conserva aunque el ayudante se reinicie, mientras el portal la sig
 
 Con tu documento (NIF o NIE) y tu contraseña de la oficina virtual, el ayudante rellena el formulario de acceso y lo envía, igual que lo harías tú. Las credenciales solo se escriben en ese formulario; no se envían a Home Assistant ni aparecen en el registro.
 
+El portal pregunta por las cookies con un diálogo que tapa la página hasta que se responde. El ayudante responde «Permitir todas las cookies», porque con menos cookies partes del portal pueden no funcionar.
+
 El formulario lleva un captcha invisible que decide por su cuenta si deja pasar. El ayudante no lo resuelve ni lo esquiva. Cuando el inicio de sesión no sale, crea una notificación en Home Assistant con el motivo y un enlace a su navegador, donde puedes entrar tú:
 
 | Qué ha pasado | Qué hace el ayudante |

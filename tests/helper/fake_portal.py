@@ -37,6 +37,21 @@ LOGIN_PAGE = """<!doctype html>
   <button id="btLogin" type="button">Entrar</button>
 </form>
 </div>
+<!-- The real page's cookie dialog covers the button until it is answered. -->
+<div id="CybotCookiebotDialog" style="position: fixed; left: 0; right: 0; bottom: 0; height: 70%%; background: #ddd">
+  <button type="button" id="CybotCookiebotDialogBodyButtonDecline" onclick="answerCookies('necessary')">Solo usar cookies necesarias</button>
+  <button type="button" id="CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll" onclick="answerCookies('all')">Permitir todas las cookies</button>
+</div>
+<script>
+  var Cookiebot = {consented: false, declined: false};
+  function answerCookies(answer) {
+    document.cookie = 'CookieConsent=' + answer + '; path=/';
+    Cookiebot.consented = answer === 'all';
+    Cookiebot.declined = !Cookiebot.consented;
+    document.getElementById('CybotCookiebotDialog').remove();
+  }
+  if (document.cookie.includes('CookieConsent=')) answerCookies(document.cookie.match(/CookieConsent=([a-z]+)/)[1]);
+</script>
 <!-- The real page carries hidden messages like this one. -->
 <div id="bannerSessionExpired" class="d-none"><div role="alert">Tu sesión ha caducado</div></div>
 <script>
@@ -180,6 +195,8 @@ def make_handler(state: State):
                     and form.get("numeroDocumento") == DOCUMENT
                     and form.get("password") == PASSWORD
                 )
+                consent = SimpleCookie(self.headers.get("Cookie", "")).get("CookieConsent")
+                form["cookie_consent"] = consent.value if consent else ""
                 with state.lock:
                     state.login_posts.append(form)
                     if accepted:
