@@ -31,8 +31,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # The add-on pulls the image whose tag equals its version, which never
-      # has a leading "v".
+      # Releases are tagged "v<version>" (v2026.11.2). The add-on pulls the
+      # image whose tag equals its version, which has no leading "v".
       - id: version
         env:
           TAG: ${{ github.event.release.tag_name }}
@@ -62,24 +62,9 @@ jobs:
     needs: image
     if: github.event_name == 'release' && !github.event.release.prerelease
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     env:
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
     steps:
-      # The add-on repository links to the tag "v<version>", while this
-      # repository's releases are tagged without the "v".
-      - name: Add the v-prefixed tag
-        if: ${{ !startsWith(github.event.release.tag_name, 'v') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$TAG" >/dev/null 2>&1; then
-            echo "v$TAG already exists"
-          else
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/v$TAG" -f sha="$GITHUB_SHA"
-          fi
       - if: env.DISPATCH_TOKEN != ''
         run: |
           curl -fsS -X POST \

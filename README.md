@@ -10,18 +10,15 @@ Componente para integrar los datos de consumo de agua del Canal de Isabel II en 
 
 ## Instalación
 
-### HACS (Recomendado)
+### Marketplace de Home Assistant (recomendado)
 
-[![Abrir el repositorio en HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=miguelangel-nubla&repository=homeassistant_canal_isabel_II&category=integration)
+Desde Home Assistant 2026.11, HACS viene integrado como **Marketplace** (**Ajustes > Marketplace**). En versiones anteriores los mismos pasos se hacen desde HACS.
 
-1.  Asegúrate de tener [HACS](https://hacs.xyz/) instalado.
-2.  Ve a **HACS > Integraciones**.
-3.  Haz clic en los tres puntos de arriba a la derecha y elige **Repositorios personalizados**.
-4.  Pega la URL de este repositorio: `https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II`
-5.  En categoría selecciona **Integración**.
-6.  Dale a **Añadir**.
-7.  Busca **Canal de Isabel II** en la lista y dale a **Descargar**.
-8.  Reinicia Home Assistant.
+[![Abrir el repositorio en el Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=miguelangel-nubla&repository=homeassistant_canal_isabel_II&category=integration)
+
+1.  Pulsa el botón de arriba, o abre el Marketplace, elige **Repositorios personalizados** en el menú de los tres puntos y añade `https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II` con la categoría **Integración**.
+2.  Busca **Canal de Isabel II** y descárgala.
+3.  Reinicia Home Assistant.
 
 ### Instalación Manual
 
