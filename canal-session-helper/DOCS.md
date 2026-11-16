@@ -17,7 +17,7 @@ El ayudante no guarda tus credenciales ni tiene nada que configurar sobre tu cue
 
 El ayudante rellena el formulario de acceso y lo envía, igual que lo harías tú. Antes responde «Permitir todas las cookies» al diálogo de cookies del portal, que tapa la página hasta que se responde.
 
-El formulario lleva un captcha invisible que decide por su cuenta si deja pasar. El ayudante no lo resuelve ni lo esquiva. Cuando no consigue entrar se lo cuenta a la integración, y es Home Assistant quien te avisa:
+El formulario lleva un captcha invisible que decide por su cuenta si deja pasar. El ayudante no lo resuelve ni lo esquiva. Puede empezar a pedir pruebas o a rechazar en cualquier momento; cómo darle las mejores opciones (sobre todo, no usar la web ni la app del Canal a la vez que el ayudante) está en [la guía de la integración](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II#el-captcha-del-portal-qué-puede-fallar). Cuando no consigue entrar se lo cuenta a la integración, y es Home Assistant quien te avisa:
 
 | Qué ha pasado | Qué hace el ayudante | Qué ves en Home Assistant |
 |---------------|----------------------|---------------------------|

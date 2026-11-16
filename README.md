@@ -81,6 +81,25 @@ Los avisos desaparecen solos cuando vuelve a haber sesión. Los detalles (cuánd
 
 Tus credenciales se guardan en Home Assistant, como las de cualquier otra integración, y solo se escriben en el formulario de la oficina virtual.
 
+### El captcha del portal: qué puede fallar
+
+El formulario de acceso de la oficina virtual está protegido por un captcha invisible (reCAPTCHA). No pide nada a quien entra: observa cada inicio de sesión y decide por su cuenta si lo deja pasar, si muestra una prueba (elegir imágenes, por ejemplo) o si lo rechaza. El ayudante no lo resuelve ni lo esquiva. Inicia sesión en un navegador de verdad, desde tu casa y con tu cuenta, y hasta ahora eso basta para que pase.
+
+Eso tiene dos consecuencias que conviene conocer:
+
+- **Puede dejar de funcionar sin previo aviso.** El Canal puede endurecer el captcha, cambiar su formulario o empezar a pedir pruebas, y nadie fuera del Canal sabe con certeza qué tiene en cuenta para decidir. Si ocurre, la integración sigue en pie pero deja de recibir datos nuevos, y Home Assistant te avisa (ver [Cuándo tienes que intervenir](#cuándo-tienes-que-intervenir)).
+- **Cuando pide una prueba, la tienes que resolver tú**, en el navegador del ayudante. Con una vez suele bastar para que vuelva a entrar solo.
+
+Para darle las mejores opciones de que funcione sin que tengas que intervenir:
+
+- **No uses la oficina virtual ni la app Canal Clientes a la vez que la integración.** La integración entra unas dos veces al día, y cada entrada dura un par de minutos. Varios inicios de sesión de la misma cuenta al mismo tiempo, desde sitios distintos, son justo lo que estos sistemas consideran sospechoso, y el portal puede además cerrar una sesión al abrirse otra. Si tienes que hacer una gestión en la web o en la app, hazla y deja pasar un rato; la integración lo reintenta sola.
+- **Usa un solo ayudante por cuenta.** Dos ayudantes, o dos Home Assistant con la misma cuenta, duplican los inicios de sesión.
+- **No lo fuerces.** Reiniciar el ayudante o recargar la integración una y otra vez para «probar» provoca inicios de sesión de más. Los datos llegan con un día de retraso de todos modos: no hay nada que ganar.
+- **Si la contraseña es incorrecta, corrígela en cuanto te lo pida.** El ayudante deja de insistir tras tres rechazos para que no se bloquee la cuenta, pero los rechazos también cuentan en tu contra.
+- **Si te pide pruebas a menudo**, entra a mano en el navegador del ayudante un par de veces: un navegador con historial de entradas resueltas por una persona suele recibir menos pruebas.
+
+Nada de esto es una garantía. La integración depende de una página web que no está pensada para esto; si conoces una vía oficial para obtener los datos, [abre una issue](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues).
+
 ## Panel de Energía
 
 [![Abrir la configuración de Energía](https://my.home-assistant.io/badges/config_energy.svg)](https://my.home-assistant.io/redirect/config_energy/)
