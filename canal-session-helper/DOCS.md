@@ -9,7 +9,7 @@ La integración [Canal de Isabel II][integration] lee tu consumo de agua con la 
 
 La sesión se conserva aunque el ayudante se reinicie, mientras el portal la siga aceptando. El portal no documenta cuánto dura una sesión.
 
-**Requisito:** la integración tiene que estar ya instalada y añadida en Home Assistant. Si está pidiendo una sesión nueva, deja ese aviso abierto: el ayudante lo resuelve.
+**Requisito:** la integración tiene que estar instalada y añadida en Home Assistant. Al añadirla, deja el campo de la cookie vacío: la sesión la entrega el ayudante. Si ya la tenías y está pidiendo una sesión nueva, deja ese aviso abierto: el ayudante lo resuelve.
 
 ## Como complemento de Home Assistant
 

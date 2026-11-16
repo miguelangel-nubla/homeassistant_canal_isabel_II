@@ -16,7 +16,15 @@ from .const import CONF_JSESSIONID, CONF_SESSION_SET_AT, DOMAIN, SESSION_EXPIRED
 
 _LOGGER = logging.getLogger(__name__)
 
+# When adding the integration the cookie may be left empty: the session
+# helper (or the set_session service) supplies the first session.
 STEP_USER_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_JSESSIONID, default=""): str,
+    }
+)
+
+STEP_REAUTH_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_JSESSIONID): str,
     }
@@ -48,7 +56,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors: Dict[str, str] = {}
         if user_input is not None:
-            self._async_abort_entries_match({CONF_JSESSIONID: user_input[CONF_JSESSIONID]})
+            cookie = user_input.get(CONF_JSESSIONID, "").strip()
+            user_input = {CONF_JSESSIONID: cookie}
+            self._async_abort_entries_match({CONF_JSESSIONID: cookie})
+            if not cookie:
+                # No session yet. The entry asks for one straight away,
+                # and whoever delivers it (helper or person) completes it.
+                return self.async_create_entry(title="Canal de Isabel II", data=user_input)
             try:
                 info = await validate_input(self.hass, user_input)
             except InvalidAuth:
@@ -108,7 +122,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=STEP_USER_DATA_SCHEMA,
+            data_schema=STEP_REAUTH_DATA_SCHEMA,
             errors=errors,
             description_placeholders={"account": "Canal de Isabel II"},
         )

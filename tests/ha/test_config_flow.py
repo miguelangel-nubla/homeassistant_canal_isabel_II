@@ -65,3 +65,20 @@ async def test_reauth_keeps_the_rest_of_the_entry_data(hass):
     assert result["reason"] == "reauth_successful"
     assert entry.data["jsessionid"] == "good"
     assert entry.data["history_imported"] is True
+
+
+async def test_adding_without_a_cookie_waits_for_a_session(hass):
+    with portal():
+        result = await submit(hass, "")
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    assert entry.data["jsessionid"] == ""
+    # It asks for a session instead of loading.
+    assert entry.state is config_entries.ConfigEntryState.SETUP_ERROR
+    assert hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+
+    # Only one entry can be waiting for its first session.
+    with portal():
+        assert (await submit(hass, ""))["reason"] == "already_configured"

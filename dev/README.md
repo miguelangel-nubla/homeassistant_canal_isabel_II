@@ -57,4 +57,4 @@ dev/haos.sh stop
 
 1. Set `version` in `custom_components/canal_de_isabel_ii/manifest.json` and merge.
 2. Publish a GitHub release tagged `v<version>` on `main`.
-3. The release builds the helper image tagged `<version>`. With the `DISPATCH_TOKEN` secret set it also tells [`hassio-repository`](https://github.com/miguelangel-nubla/hassio-repository) to pick up the new add-on version; without it, send that repository an `update` dispatch for `canal-session-helper` by hand.
+3. The release builds the helper image tagged `<version>`. With the `DISPATCH_TOKEN` secret set it also tells [`hassio-repository`](https://github.com/miguelangel-nubla/hassio-repository) to pick up the new add-on version; without it, send that repository an `update` dispatch with `app: canal-session-helper` by hand.
