@@ -1,5 +1,17 @@
 ---
 configuration:
+  document:
+    name: Número de documento
+    description: >-
+      El NIF o NIE con el que entras en la oficina virtual. Con él y la
+      contraseña el ayudante inicia sesión por sí mismo. Deja los dos vacíos
+      para iniciar sesión a mano en el navegador del ayudante.
+  password:
+    name: Contraseña
+    description: Tu contraseña de la oficina virtual.
+  profile:
+    name: Perfil
+    description: El perfil que eliges en el formulario de acceso de la oficina virtual.
   check_interval:
     name: Intervalo de comprobación
     description: Segundos entre comprobaciones de que la sesión del portal sigue activa.

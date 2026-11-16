@@ -12,6 +12,8 @@ services:
       HA_URL: "http://homeassistant.local:8123"
       HA_TOKEN: "paste-a-long-lived-access-token"
       VNC_PASSWORD: "change-me"
+      CANAL_DOCUMENT: "12345678Z"       # your NIF or NIE and password for the
+      CANAL_PASSWORD: "your-password"   # virtual office; remove both to log in by hand
       TZ: "Europe/Madrid"
     volumes:
       - canal-session-data:/data

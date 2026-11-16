@@ -5,6 +5,7 @@ on:
     branches: ["**"]
     paths:
       - "canal-session-helper/**"
+      - "tests/helper/**"
       - ".github/workflows/session-helper.yml"
   release:
     types: [published]
@@ -20,7 +21,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  e2e:
+    # The image's browser logs in to a fake portal (tests/helper).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tests/helper/e2e.py
+
   image:
+    needs: e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

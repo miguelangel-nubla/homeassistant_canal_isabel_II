@@ -1,5 +1,17 @@
 ---
 configuration:
+  document:
+    name: Document number
+    description: >-
+      The NIF or NIE you log in to the virtual office with. With it and the
+      password the helper logs in by itself. Leave both empty to log in by
+      hand in the helper's browser.
+  password:
+    name: Password
+    description: Your password for the virtual office.
+  profile:
+    name: Profile
+    description: The profile you choose on the virtual office's login form.
   check_interval:
     name: Check interval
     description: Seconds between checks that the portal session is still alive.

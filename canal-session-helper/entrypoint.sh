@@ -15,6 +15,9 @@ import json, shlex
 options = json.load(open("/data/options.json"))
 print("export CHECK_INTERVAL=" + shlex.quote(str(options.get("check_interval", 600))))
 print("export HA_ENTRY_ID=" + shlex.quote(str(options.get("entry_id") or "")))
+print("export CANAL_DOCUMENT=" + shlex.quote(str(options.get("document") or "")))
+print("export CANAL_PASSWORD=" + shlex.quote(str(options.get("password") or "")))
+print("export CANAL_PROFILE=" + shlex.quote(str(options.get("profile") or "")))
 PY
 )"
     fi
@@ -29,7 +32,8 @@ if [ "$(id -u)" = "0" ]; then
     exec setpriv --reuid helper --regid helper --init-groups env HOME=/home/helper "$0" "$@"
 fi
 
-# Each secret may be given directly or as a file (VNC_PASSWORD_FILE, HA_TOKEN_FILE).
+# Each secret may be given directly or as a file (VNC_PASSWORD_FILE,
+# HA_TOKEN_FILE, CANAL_PASSWORD_FILE; the helper reads the last two).
 if [ -z "${VNC_PASSWORD:-}" ] && [ -n "${VNC_PASSWORD_FILE:-}" ]; then
     VNC_PASSWORD="$(head -n 1 "$VNC_PASSWORD_FILE")"
 fi

@@ -10,7 +10,7 @@
       },
       "reauth_confirm": {
         "title": "Hace falta una sesión",
-        "description": "{account} necesita una sesión del portal. Inicia sesión desde el ayudante de sesión, o inicia sesión en la oficina virtual con tu navegador y pega aquí la cookie JSESSIONID.",
+        "description": "{account} necesita una sesión del portal. Si usas el ayudante de sesión, deja esto abierto: él entrega una sesión nueva por sí mismo, o te avisa si tienes que iniciar sesión en su navegador. Si no, inicia sesión en la oficina virtual con tu navegador y pega aquí la cookie JSESSIONID.",
         "data": {
           "jsessionid": "Cookie JSESSIONID"
         }
