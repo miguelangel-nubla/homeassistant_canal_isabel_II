@@ -138,6 +138,14 @@
       "possible_leak": {
         "name": "Possible leak"
       }
+    },
+    "number": {
+      "rest_liters": {
+        "name": "Leak: flow that counts as rest"
+      },
+      "leak_hours": {
+        "name": "Leak: hours without rest to flag it"
+      }
     }
   },
   "exceptions": {

@@ -16,13 +16,20 @@ Por cada contrato, en el dispositivo `Canal de Isabel II <contrato>`:
 | **Lectura del contador** | Lectura absoluta en m³, la cifra que aparece en la factura. |
 | **Consumo del último día** | Litros del último día que el Canal ha publicado completo. La fecha va en el atributo `date`. |
 | **Caudal mínimo del último día** | Los litros de la hora más tranquila de ese día. En una casa sin fugas es 0. |
-| **Posible fuga** | Se activa cuando el contador no ha parado ni una hora en las últimas 48 horas publicadas. |
+| **Posible fuga** | Se activa cuando el contador no ha descansado ni una hora en las últimas 48 horas publicadas. Los dos límites se pueden ajustar. |
 | **Datos hasta** | Hasta qué hora ha publicado datos el Canal. Sirve para saber si están al día. |
 | **Consumo de la última hora** | Litros de la última hora publicada. Desactivado por defecto: esa hora ya pasó hace mucho cuando se publica. |
 
 ### Posible fuga
 
-En una casa siempre hay alguna hora del día, normalmente de madrugada, en la que no se gasta nada. Un contador que no descansa durante dos días seguidos suele ser una cisterna o un grifo que gotea, o una fuga después del contador. Como los datos llegan con un día de retraso, sirve para las fugas que duran, no para una rotura. Un riego por goteo, un descalcificador o una casa en la que se usa agua a todas horas también lo activan.
+En una casa siempre hay alguna hora del día, normalmente de madrugada, en la que no se gasta nada. Se cuenta como hora de descanso la que no llega a 1 litro, porque los contadores apuntan unas centésimas de litro en muchas horas en las que no hay nada abierto. Un contador que no descansa durante dos días seguidos suele ser una cisterna o un grifo que gotea, o una fuga después del contador. Como los datos llegan con un día de retraso, sirve para las fugas que duran, no para una rotura. Un riego por goteo, un descalcificador o una casa en la que se usa agua a todas horas también lo activan.
+
+Cada contrato tiene dos ajustes, en la sección **Configuración** de su dispositivo, para adaptar el aviso a la casa:
+
+| Ajuste | Por defecto | Para qué |
+|--------|-------------|----------|
+| **Fuga: consumo que cuenta como reposo** | 1 L/h | Súbelo si en tu casa hay algo que gasta un poco a todas horas y no quieres que cuente. Bájalo para enterarte de goteos más pequeños. |
+| **Fuga: horas sin reposo para avisar** | 48 h | Menos horas avisan antes y se equivocan más; más horas, al revés. |
 
 La oficina virtual tiene además sus propias alarmas de consumo (por ejemplo, un máximo de litros al día), que avisan por SMS. La integración no las lee ni las cambia; con **Consumo del último día** puedes crear las tuyas en Home Assistant.
 

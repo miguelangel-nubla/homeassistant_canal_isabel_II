@@ -152,16 +152,16 @@ async def test_the_sensors_describe_the_last_full_day(recorder_mock, hass, porta
     # T0 is 02:00 in Madrid. Three full days from midnight, the last two
     # with water running every hour, then two hours of a fourth.
     first_day = [0, 0, 0, 0, 0, 0, 12, 40] + [10] * 16
-    wet_days = [0.5] * 48
-    fourth_day = [0.5] * 2
+    wet_days = [1.5] * 48
+    fourth_day = [1.5] * 2
     portal.data = PortalData(readings=readings(-2, first_day + wet_days + fourth_day), meter=METER)
     await setup_entry(hass)
     prefix = f"canal_de_isabel_ii_{CONTRACT}"
 
     last_day = hass.states.get(f"sensor.{prefix}_last_day_s_consumption")
-    assert float(last_day.state) == 12.0
+    assert float(last_day.state) == 36.0
     assert last_day.attributes["date"] == "2026-04-03"
-    assert float(hass.states.get(f"sensor.{prefix}_last_day_s_minimum_flow").state) == 0.5
+    assert float(hass.states.get(f"sensor.{prefix}_last_day_s_minimum_flow").state) == 1.5
     assert hass.states.get(f"sensor.{prefix}_data_until").state == "2026-04-04T00:00:00+00:00"
 
     leak = hass.states.get(f"binary_sensor.{prefix}_possible_leak")
@@ -170,6 +170,39 @@ async def test_the_sensors_describe_the_last_full_day(recorder_mock, hass, porta
     # The hourly sensor is off unless someone turns it on.
     assert hass.states.get(f"sensor.{prefix}_last_hour_s_consumption") is None
     assert er.async_get(hass).async_get(f"sensor.{prefix}_last_hour_s_consumption").disabled
+
+
+async def test_the_leak_check_has_its_own_settings_for_each_contract(recorder_mock, hass, portal):
+    # After an hour with nothing, water every hour for four days, but never
+    # more than 0.8 L: under the default limit that is a meter at rest.
+    portal.data = PortalData(readings=readings(-2, [0] + [0.8] * 100), meter=METER)
+    entry = await setup_entry(hass)
+    registry = er.async_get(hass)
+    leak = f"binary_sensor.canal_de_isabel_ii_{CONTRACT}_possible_leak"
+    rest = registry.async_get_entity_id("number", DOMAIN, f"canal_ii_rest_liters_{CONTRACT}")
+    hours = registry.async_get_entity_id("number", DOMAIN, f"canal_ii_leak_hours_{CONTRACT}")
+    assert float(hass.states.get(rest).state) == 1.0
+    assert float(hass.states.get(hours).state) == 48
+    assert hass.states.get(leak).state == "off"
+
+    # A household that wants to hear about a trickle that small.
+    await hass.services.async_call("number", "set_value", {"entity_id": rest, "value": 0.5}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(leak).state == "on"
+    assert hass.states.get(leak).attributes["liters_per_hour_at_rest"] == 0.5
+
+    # ...but only after five days of it.
+    await hass.services.async_call("number", "set_value", {"entity_id": hours, "value": 120}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(leak).state == "off"
+
+    # The settings are kept across a restart of the integration.
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert float(hass.states.get(rest).state) == 0.5
+    assert float(hass.states.get(hours).state) == 120
+    assert hass.states.get(leak).state == "off"
+    assert hass.states.get(leak).attributes["hours_for_a_leak"] == 120
 
 
 async def test_overlapping_refresh_continues_the_series(recorder_mock, hass, portal):

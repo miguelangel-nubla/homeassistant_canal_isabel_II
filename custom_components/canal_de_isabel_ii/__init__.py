@@ -12,7 +12,7 @@ A session is only wanted when data is about to be read, twice a day. It is
 not kept alive in between.
 """
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -64,7 +64,7 @@ from .statistics import async_import_consumption
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["sensor", "binary_sensor"]
+PLATFORMS = ["sensor", "binary_sensor", "number"]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -99,6 +99,10 @@ class Runtime:
     wanted_since: Optional[datetime] = None
     # The portal refused the credentials: wait for the person to enter them again.
     refused: bool = False
+    # The settings of the leak check that differ from the defaults, by
+    # contract: {contract: {"rest_liters": ..., "leak_hours": ...}}. They
+    # belong to the number entities (number.py), which keep them.
+    leak_settings: Dict[str, Dict[str, float]] = field(default_factory=dict)
 
 
 def _runtime(hass: HomeAssistant, entry: ConfigEntry) -> Optional[Runtime]:
