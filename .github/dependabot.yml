@@ -17,3 +17,6 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # The requirements are lower bounds (>=). Raise one only when a newer
+    # version no longer fits it, not every time something is released.
+    versioning-strategy: increase-if-necessary
