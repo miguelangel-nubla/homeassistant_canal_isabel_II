@@ -49,11 +49,19 @@
     },
     "login_challenge": {
       "title": "Canal de Isabel II asks for a check before logging in",
-      "description": "The portal showed a check (captcha) that a person has to answer. Open the session helper's browser and log in by hand.{link}\n\nThe helper will try again by itself at {retry_at}. This notice goes away once there is a session."
+      "description": "The portal showed a check (captcha) that a person has to answer. Open the session helper's browser and log in by hand.\n\nThe helper will try again by itself at {retry_at}. This notice goes away once there is a session."
+    },
+    "login_challenge_link": {
+      "title": "Canal de Isabel II asks for a check before logging in",
+      "description": "The portal showed a check (captcha) that a person has to answer. [Open the session helper's browser]({url}) and log in by hand.\n\nThe helper will try again by itself at {retry_at}. This notice goes away once there is a session."
     },
     "login_failed": {
       "title": "Could not log in to Canal de Isabel II",
-      "description": "The session helper could not log in to the virtual office: the portal did not answer as expected. The portal may be down for a while, or its page may have changed.\n\nThe helper will try again at {retry_at}. If it keeps happening, open its browser to see what the portal shows and log in by hand.{link}"
+      "description": "The session helper could not log in to the virtual office: the portal did not answer as expected. The portal may be down for a while, or its page may have changed.\n\nThe helper will try again at {retry_at}. If it keeps happening, open its browser to see what the portal shows and log in by hand."
+    },
+    "login_failed_link": {
+      "title": "Could not log in to Canal de Isabel II",
+      "description": "The session helper could not log in to the virtual office: the portal did not answer as expected. The portal may be down for a while, or its page may have changed.\n\nThe helper will try again at {retry_at}. If it keeps happening, [open its browser]({url}) to see what the portal shows and log in by hand."
     }
   },
   "services": {

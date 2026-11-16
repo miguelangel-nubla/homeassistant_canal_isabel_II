@@ -49,11 +49,19 @@
     },
     "login_challenge": {
       "title": "El Canal de Isabel II pide una comprobación para iniciar sesión",
-      "description": "El portal ha mostrado una comprobación (captcha) que tiene que resolver una persona. Abre el navegador del ayudante de sesión e inicia sesión a mano.{link}\n\nEl ayudante lo volverá a intentar por su cuenta a las {retry_at}. Este aviso desaparece cuando haya una sesión."
+      "description": "El portal ha mostrado una comprobación (captcha) que tiene que resolver una persona. Abre el navegador del ayudante de sesión e inicia sesión a mano.\n\nEl ayudante lo volverá a intentar por su cuenta a las {retry_at}. Este aviso desaparece cuando haya una sesión."
+    },
+    "login_challenge_link": {
+      "title": "El Canal de Isabel II pide una comprobación para iniciar sesión",
+      "description": "El portal ha mostrado una comprobación (captcha) que tiene que resolver una persona. [Abre el navegador del ayudante de sesión]({url}) e inicia sesión a mano.\n\nEl ayudante lo volverá a intentar por su cuenta a las {retry_at}. Este aviso desaparece cuando haya una sesión."
     },
     "login_failed": {
       "title": "No se ha podido iniciar sesión en el Canal de Isabel II",
-      "description": "El ayudante de sesión no ha conseguido iniciar sesión en la oficina virtual: el portal no ha respondido como se esperaba. Puede ser una caída pasajera del portal o un cambio en su página.\n\nEl ayudante lo volverá a intentar a las {retry_at}. Si se repite, abre su navegador para ver qué muestra el portal e inicia sesión a mano.{link}"
+      "description": "El ayudante de sesión no ha conseguido iniciar sesión en la oficina virtual: el portal no ha respondido como se esperaba. Puede ser una caída pasajera del portal o un cambio en su página.\n\nEl ayudante lo volverá a intentar a las {retry_at}. Si se repite, abre su navegador para ver qué muestra el portal e inicia sesión a mano."
+    },
+    "login_failed_link": {
+      "title": "No se ha podido iniciar sesión en el Canal de Isabel II",
+      "description": "El ayudante de sesión no ha conseguido iniciar sesión en la oficina virtual: el portal no ha respondido como se esperaba. Puede ser una caída pasajera del portal o un cambio en su página.\n\nEl ayudante lo volverá a intentar a las {retry_at}. Si se repite, [abre su navegador]({url}) para ver qué muestra el portal e inicia sesión a mano."
     }
   },
   "services": {
