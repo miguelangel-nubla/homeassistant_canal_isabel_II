@@ -18,7 +18,7 @@ El Canal publica los datos con medio día o un día de retraso, así que no es u
 
 ## Instalación
 
-Desde Home Assistant 2026.11, HACS viene integrado como **Marketplace** (**Ajustes > Marketplace**). En versiones anteriores los mismos pasos se hacen desde HACS.
+La integración se instala desde el **Marketplace** de Home Assistant (**Ajustes > Marketplace**).
 
 [![Abrir el repositorio en el Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=miguelangel-nubla&repository=homeassistant_canal_isabel_II&category=integration)
 
