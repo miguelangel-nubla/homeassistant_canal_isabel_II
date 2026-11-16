@@ -2,7 +2,7 @@
 
 Integración que lleva a Home Assistant el consumo de agua de tu contrato del [Canal de Isabel II](https://oficinavirtual.canaldeisabelsegunda.es/) (Madrid): el consumo hora a hora, listo para el panel de Energía, y la lectura del contador.
 
-El Canal no ofrece una API pública. La integración lee los datos de la oficina virtual con la sesión de un navegador que ha iniciado sesión en ella. Con el ayudante de sesión ese navegador entra solo, con tu documento y tu contraseña, cada vez que hace falta.
+El Canal no ofrece una API pública. Los datos se leen de la oficina virtual, y para entrar en ella hace falta un navegador de verdad, porque su formulario de acceso lleva un captcha. Por eso la integración trabaja con un **ayudante de sesión**: un navegador que se ejecuta en tu servidor e inicia sesión con tu documento y tu contraseña cada vez que la integración va a leer datos.
 
 ## Qué obtienes
 
@@ -32,39 +32,37 @@ Instalación manual: copia la carpeta `custom_components/canal_de_isabel_ii` de 
 
 ## Configuración
 
-La integración necesita la sesión de un navegador que haya iniciado sesión en la oficina virtual. El portal la cierra cada cierto tiempo (no documenta cuándo) y su formulario de acceso lleva un captcha que solo funciona en un navegador de verdad. Por eso el inicio de sesión lo hace el ayudante de sesión, que es ese navegador, y no la integración.
+Son dos piezas: la integración, que guarda tus credenciales y descarga los datos, y el ayudante de sesión, que inicia sesión en la oficina virtual cuando la integración se lo pide.
 
-### Con el ayudante de sesión (recomendado)
-
-El ayudante es un navegador que se ejecuta en tu servidor, como aplicación de Home Assistant (lo que antes se llamaba complemento) o como contenedor Docker.
-
-1. Añade la integración y deja el campo de la cookie vacío:
+1. Añade la integración y escribe tu número de documento (NIF o NIE), tu contraseña de la oficina virtual y el perfil con el que entras (normalmente **Particular**):
 
    [![Añadir la integración a Home Assistant](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=canal_de_isabel_ii)
 
    A mano: **Ajustes > Dispositivos y servicios > Añadir integración** y busca **Canal de Isabel II**.
-2. Instala el ayudante siguiendo [su guía](canal-session-helper/DOCS.md) y dale tu documento y tu contraseña de la oficina virtual.
+2. Instala el ayudante de sesión siguiendo [su guía](canal-session-helper/DOCS.md). Como aplicación de Home Assistant (lo que antes se llamaba complemento) no hay nada que configurar; como contenedor Docker solo necesita la dirección de Home Assistant y un token.
 
-A partir de ahí no hay nada más que hacer: el ayudante inicia sesión, entrega la sesión a la integración, la mantiene viva y vuelve a iniciar sesión cuando el portal la cierra. Los datos aparecen en cuanto llega la primera sesión.
+En un minuto el ayudante inicia sesión y la integración descarga el último año de consumo. No hay nada más que hacer.
 
-Hasta que llega una sesión, y cada vez que el portal cierra la que había, Home Assistant muestra un aviso de que la integración necesita volver a autenticarse. Con el ayudante no hay que hacer nada con él: desaparece cuando el ayudante entrega la sesión nueva, normalmente en menos de diez minutos.
+### Cómo funciona
 
-Solo si el ayudante no consigue entrar (el portal rechaza las credenciales o pide resolver un captcha) crea una notificación en Home Assistant, con el motivo, para que entres tú desde su navegador.
+- La integración lee los datos dos veces al día. La primera descarga trae el último año de consumo horario; las siguientes, los últimos 30 días, de modo que las horas que el Canal publica con retraso se rellenan solas.
+- Cuando le toca leer y no tiene una sesión válida, lo anota. El ayudante pregunta cada minuto a Home Assistant si hay trabajo, inicia sesión con tus credenciales y entrega la sesión. La integración descarga los datos en ese momento.
+- Entre lecturas no se hace nada en el portal: la sesión no se mantiene abierta, simplemente caduca.
 
-Tu documento y tu contraseña se quedan en la configuración del ayudante, en tu servidor, y solo se escriben en el formulario de la oficina virtual. Si prefieres no guardarlos, deja esos campos vacíos e inicia sesión a mano en el navegador del ayudante cada vez que te avise.
+### Cuándo tienes que intervenir
 
-### A mano
+Solo cuando el ayudante no consigue entrar. Home Assistant te lo dice en **Ajustes**, sin que tengas que estar pendiente:
 
-1. Inicia sesión en la [oficina virtual](https://oficinavirtual.canaldeisabelsegunda.es/) con tu navegador.
-2. Abre las herramientas de desarrollador (F12) y ve a **Aplicación > Cookies** (*Almacenamiento > Cookies* en Firefox).
-3. Copia el valor de la cookie `JSESSIONID`.
-4. Añade la integración como en el paso 1 de arriba y pega el valor.
+| Qué ha pasado | Qué ves en Home Assistant | Qué hacer |
+|---------------|---------------------------|-----------|
+| El portal rechaza tus credenciales | La integración pide volver a autenticarse | Escribe de nuevo el documento y la contraseña. |
+| El portal pide resolver un captcha | Un aviso en **Reparaciones** con un enlace | Abre el navegador del ayudante e inicia sesión a mano, una vez. |
+| El portal no responde o ha cambiado su página | Un aviso en **Reparaciones** | Esperar: el ayudante lo reintenta. Si se repite, abre su navegador para ver qué pasa. |
+| El ayudante no está en marcha | Un aviso en **Reparaciones** | Arranca el ayudante. |
 
-Cuando el portal cierre la sesión, Home Assistant te pedirá una nueva: repite los pasos y pégala en el aviso. De esta forma nadie inicia sesión por ti, y el portal cierra las sesiones a menudo: para no tener que estar pendiente, usa el ayudante.
+Los avisos desaparecen solos cuando vuelve a haber sesión. Los detalles (cuándo reintenta y por qué no insiste con una contraseña rechazada) están en la [guía del ayudante](canal-session-helper/DOCS.md).
 
-### Qué se descarga
-
-La primera descarga trae el último año de consumo horario. Después la integración vuelve a leer los últimos 30 días dos veces al día, de modo que las horas publicadas con retraso se rellenan solas. Entre descargas comprueba la sesión cada 10 minutos para mantenerla viva.
+Tus credenciales se guardan en Home Assistant, como las de cualquier otra integración, y solo se escriben en el formulario de la oficina virtual.
 
 ## Panel de Energía
 
@@ -75,6 +73,8 @@ En la configuración del panel de Energía (**Ajustes > Paneles > Energía**), e
 Cada importación continúa la serie guardada, así que volver a descargar las mismas horas no duplica ni descuadra nada.
 
 > [!IMPORTANT]
+> **Si actualizas desde 2026.11.5 o anterior:** actualiza la integración y el ayudante a la vez. Home Assistant te pedirá el documento y la contraseña de la oficina virtual, que ahora se guardan en la integración; el histórico se conserva. El ayudante ya no tiene opciones propias (`document`, `password`, `CANAL_DOCUMENT`, `CANAL_PASSWORD`...) y pegar la cookie a mano ya no es una forma de configurar la integración.
+>
 > **Si actualizas desde una versión anterior a 2026.11:** el histórico ya no se guarda en el sensor `Canal de Isabel II Total`, que se elimina. Tienes que volver a elegir la fuente de agua en el panel de Energía. Las estadísticas antiguas de ese sensor se pueden borrar desde [**Herramientas para desarrolladores > Estadísticas**](https://my.home-assistant.io/redirect/tools_statistics/).
 
 ## Limitaciones conocidas
@@ -84,18 +84,19 @@ Cada importación continúa la serie guardada, así que volver a descargar las m
 
 ## Referencia
 
-### Servicio `canal_de_isabel_ii.set_session`
+### Diagnóstico
 
-Recibe una cookie `JSESSIONID`, la comprueba con el portal, la guarda e importa los datos al momento. Solo lo pueden llamar administradores. Es lo que usa el ayudante de sesión, y sirve para cualquier otra herramienta que obtenga la sesión fuera de Home Assistant.
+**Descargar diagnósticos**, en [la página de la integración](https://my.home-assistant.io/redirect/integration/?domain=canal_de_isabel_ii), muestra si hay una sesión pedida y desde cuándo, cuándo preguntó el ayudante por última vez y el historial de sesiones (cuándo se entregó cada una, cuántas lecturas sirvió y cuándo la rechazó el portal). Nunca incluye las credenciales ni la cookie.
 
-| Campo | |
-|-------|---|
-| `jsessionid` | Valor de la cookie. |
-| `entry_id` | Opcional. Solo si la integración está añadida más de una vez. |
+### Servicios para el ayudante
 
-### Diagnóstico de la sesión
+La integración no llama al ayudante: es el ayudante quien llama a estos servicios, que solo admiten administradores. No hace falta usarlos a mano; se documentan para quien quiera sustituir el ayudante por otra herramienta.
 
-La integración registra cuánto dura cada sesión: cuándo se configuró, la última comprobación correcta y el momento en que el portal la rechazó. Se consulta con **Descargar diagnósticos** en [la página de la integración](https://my.home-assistant.io/redirect/integration/?domain=canal_de_isabel_ii). La cookie nunca se incluye.
+| Servicio | Para qué |
+|----------|----------|
+| `canal_de_isabel_ii.session_request` | Devuelve las entradas que necesitan una sesión, con sus credenciales. Hay que llamarlo pidiendo la respuesta (`return_response`). |
+| `canal_de_isabel_ii.set_session` | Entrega la cookie `JSESSIONID` de una sesión iniciada (`jsessionid`, y `entry_id` si hay más de una entrada). La integración la comprueba y descarga los datos. |
+| `canal_de_isabel_ii.report_login` | Avisa de que el inicio de sesión no ha salido: `result` (`refused`, `challenge` o `failed`) y, opcionales, `detail`, `retry_at` y `helper_url`. |
 
 ## Desarrollo
 

@@ -1,3 +1,10 @@
+# The services the session helper works with. See the README ("Referencia").
+session_request:
+  fields:
+    helper_url:
+      required: false
+      selector:
+        text:
 set_session:
   fields:
     jsessionid:
@@ -9,3 +16,30 @@ set_session:
       selector:
         config_entry:
           integration: canal_de_isabel_ii
+report_login:
+  fields:
+    result:
+      required: true
+      selector:
+        select:
+          options:
+            - refused
+            - challenge
+            - failed
+    entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: canal_de_isabel_ii
+    detail:
+      required: false
+      selector:
+        text:
+    retry_at:
+      required: false
+      selector:
+        text:
+    helper_url:
+      required: false
+      selector:
+        text:

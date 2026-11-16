@@ -2,9 +2,10 @@
 
 One small web server plays both parts. As the portal it has a login form
 with the same fields and the same behaviour as the real one (a profile to
-choose, a button that asks an invisible captcha before sending the form)
-and a consumption page that needs a session. As Home Assistant it records
-the service calls the helper makes.
+choose, a cookie dialog over the button, a button that asks an invisible
+captcha before sending the form) and a consumption page that needs a
+session. As Home Assistant it plays the integration: it says which
+accounts want a session, takes the sessions and records the reports.
 """
 import json
 import threading
@@ -14,6 +15,10 @@ from urllib.parse import parse_qs, urlparse
 
 DOCUMENT = "X1234567L"
 PASSWORD = "correct horse; battery 'staple'"
+# A second account, to see that one account never gets the session of another.
+OTHER_DOCUMENT = "12345678Z"
+OTHER_PASSWORD = "another password"
+ACCOUNTS = {DOCUMENT: ("NIE", PASSWORD), OTHER_DOCUMENT: ("NIF", OTHER_PASSWORD)}
 HA_TOKEN = "test-token"
 FIELD = "_com_vass_cyii_ovir_login_module_"
 
@@ -112,11 +117,26 @@ class State:
 
     def reset(self) -> None:
         with self.lock:
-            self.sessions = set()   # sessions that are logged in
+            self.sessions = {}      # sessions that are logged in -> their document
             self.issued = 0
+            self.portal_hits = 0    # requests for portal pages
             self.login_posts = []   # the forms received, as dicts
             self.ha_calls = []      # (service, data)
             self.challenge = False  # the captcha asks for a person
+            self.wants = {}         # entry id -> what session_request says about it
+            self.refused = set()    # entries waiting for new credentials
+
+    def want(self, entry_id: str, document: str, password: str, set_at: str = "1") -> None:
+        """Make an entry want a session, as the integration does when data is due."""
+        with self.lock:
+            self.refused.discard(entry_id)
+            self.wants[entry_id] = {
+                "entry_id": entry_id,
+                "document": document,
+                "password": password,
+                "profile": "particular",
+                "credentials_set_at": set_at,
+            }
 
     def new_cookie(self, prefix: str) -> str:
         self.issued += 1
@@ -159,6 +179,9 @@ def make_handler(state: State):
 
         def do_GET(self) -> None:
             url = urlparse(self.path)
+            if url.path in ("/group/ovir/consumo", "/login"):
+                with state.lock:
+                    state.portal_hits += 1
             if url.path == "/group/ovir/consumo":
                 with state.lock:
                     logged_in = self._cookie() in state.sessions
@@ -189,11 +212,10 @@ def make_handler(state: State):
             body = self._body()
             if url.path == "/web/ovir/login":
                 form = {key.removeprefix(FIELD): values[0] for key, values in parse_qs(body.decode()).items()}
-                accepted = (
-                    form.get("tipoUsuario") == "PARTICULAR"
-                    and form.get("tipoDocumento") == "NIE"
-                    and form.get("numeroDocumento") == DOCUMENT
-                    and form.get("password") == PASSWORD
+                document = form.get("numeroDocumento")
+                accepted = form.get("tipoUsuario") == "PARTICULAR" and ACCOUNTS.get(document) == (
+                    form.get("tipoDocumento"),
+                    form.get("password"),
                 )
                 consent = SimpleCookie(self.headers.get("Cookie", "")).get("CookieConsent")
                 form["cookie_consent"] = consent.value if consent else ""
@@ -201,7 +223,7 @@ def make_handler(state: State):
                     state.login_posts.append(form)
                     if accepted:
                         cookie = state.new_cookie("session")
-                        state.sessions.add(cookie)
+                        state.sessions[cookie] = document
                 if accepted:
                     self._redirect("/group/ovir/consumo", cookie)
                 else:
@@ -210,18 +232,25 @@ def make_handler(state: State):
                 if self.headers.get("Authorization") != f"Bearer {HA_TOKEN}":
                     self._send(401, "unauthorized")
                     return
-                service = url.path.removeprefix("/api/services/")
+                service = url.path.removeprefix("/api/services/").removeprefix("canal_de_isabel_ii/")
                 data = json.loads(body or b"{}")
+                answer, status = [], 200
                 with state.lock:
-                    state.ha_calls.append((service, data))
-                    refused = (
-                        service == "canal_de_isabel_ii/set_session"
-                        and data.get("jsessionid") not in state.sessions
-                    )
-                if refused:
-                    self._send(400, '{"message": "session rejected"}', "application/json")
-                else:
-                    self._send(200, "[]", "application/json")
+                    if service != "session_request":
+                        state.ha_calls.append((service, data))
+                    want = state.wants.get(data.get("entry_id"))
+                    if service == "session_request":
+                        requests = [w for entry, w in state.wants.items() if entry not in state.refused]
+                        answer = {"changed_states": [], "service_response": {"requests": requests}}
+                    elif service == "set_session":
+                        # Only the session of the entry's own account will do.
+                        if want and state.sessions.get(data.get("jsessionid")) == want["document"].upper():
+                            del state.wants[data["entry_id"]]
+                        else:
+                            answer, status = {"message": "session rejected"}, 400
+                    elif service == "report_login" and data.get("result") == "refused":
+                        state.refused.add(data.get("entry_id"))
+                self._send(status, json.dumps(answer), "application/json")
             else:
                 self._send(404, "not found")
 

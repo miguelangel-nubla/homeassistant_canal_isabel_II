@@ -124,13 +124,6 @@ class CanalIsabelIIAPI:
             return SESSION_EXPIRED, detail
         return SESSION_ERROR, detail
 
-    def check_auth(self) -> bool:
-        """Check if the session is valid."""
-        state, detail = self.probe()
-        if state != SESSION_OK:
-            _LOGGER.warning("Auth check failed: %s", detail)
-        return state == SESSION_OK
-
     def get_consumption_data(self, days: Optional[int] = None) -> PortalData:
         """Fetch the hourly consumption CSV and the meter summary.
 

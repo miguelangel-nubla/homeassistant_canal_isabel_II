@@ -3,33 +3,73 @@
     "step": {
       "user": {
         "title": "Canal de Isabel II",
-        "description": "Leave the field empty if you use the session helper: it will deliver the session. Otherwise log in to the virtual office in your browser and paste the value of the JSESSIONID cookie.",
+        "description": "The details you log in to the [virtual office](https://oficinavirtual.canaldeisabelsegunda.es/) with. The login is done by the session helper, which has to be installed: without it nothing is downloaded.",
         "data": {
-          "jsessionid": "JSESSIONID cookie (optional)"
+          "document": "Document number",
+          "password": "Password",
+          "profile": "Profile"
+        },
+        "data_description": {
+          "document": "The NIF or NIE you log in with.",
+          "profile": "The profile you choose on the virtual office's login form."
         }
       },
       "reauth_confirm": {
-        "title": "A session is needed",
-        "description": "{account} needs a portal session. If you use the session helper, leave this open: it delivers a new session by itself, or notifies you if you have to log in in its browser. Otherwise log in to the virtual office in your browser and paste the JSESSIONID cookie here.",
+        "title": "Virtual office credentials",
+        "description": "The session helper needs your document number and your password for the virtual office to log in. If it already had them, the portal did not accept them: check them and enter them again.{reason}",
         "data": {
-          "jsessionid": "JSESSIONID cookie"
+          "document": "Document number",
+          "password": "Password",
+          "profile": "Profile"
         }
       }
     },
     "error": {
-      "invalid_auth": "The portal did not accept this session. Check the cookie value and that you are still logged in.",
-      "unknown": "Unexpected error. Check the logs.",
-      "cannot_connect": "The portal could not be reached or did not answer as expected. Try again later."
+      "document_required": "Enter your document number."
     },
     "abort": {
-      "reauth_successful": "Session updated.",
-      "already_configured": "This session is already configured."
+      "reauth_successful": "Credentials saved. The session helper will log in within a minute.",
+      "already_configured": "This account is already configured."
+    }
+  },
+  "selector": {
+    "profile": {
+      "options": {
+        "particular": "Particular (individual)",
+        "empresa": "Empresa (company)",
+        "administrador": "Administrador (property manager)",
+        "entidad_publica": "Entidades públicas (public bodies)"
+      }
+    }
+  },
+  "issues": {
+    "helper_missing": {
+      "title": "The Canal de Isabel II session helper is not answering",
+      "description": "The integration needs to log in to the virtual office to download the consumption, and the session helper is what does it. No helper has asked for work in the last few minutes.\n\nCheck that the helper is installed and running and, if it is a Docker container, that its `HA_URL` and token are right. This notice goes away when the helper connects again."
+    },
+    "login_challenge": {
+      "title": "Canal de Isabel II asks for a check before logging in",
+      "description": "The portal showed a check (captcha) that a person has to answer. Open the session helper's browser and log in by hand.{link}\n\nThe helper will try again by itself at {retry_at}. This notice goes away once there is a session."
+    },
+    "login_failed": {
+      "title": "Could not log in to Canal de Isabel II",
+      "description": "The session helper could not log in to the virtual office: the portal did not answer as expected. The portal may be down for a while, or its page may have changed.\n\nThe helper will try again at {retry_at}. If it keeps happening, open its browser to see what the portal shows and log in by hand.{link}"
     }
   },
   "services": {
+    "session_request": {
+      "name": "Ask for work",
+      "description": "For the session helper: returns the entries that need a portal session, with their credentials.",
+      "fields": {
+        "helper_url": {
+          "name": "Helper address",
+          "description": "Link to the helper's browser."
+        }
+      }
+    },
     "set_session": {
-      "name": "Set session",
-      "description": "Gives the integration a new portal session and imports the data straight away. Meant for tools that obtain the session outside Home Assistant.",
+      "name": "Deliver session",
+      "description": "For the session helper: delivers a portal session. The integration downloads the data straight away.",
       "fields": {
         "jsessionid": {
           "name": "JSESSIONID cookie",
@@ -37,7 +77,33 @@
         },
         "entry_id": {
           "name": "Entry",
-          "description": "Which Canal de Isabel II entry to update. Only needed if there is more than one."
+          "description": "Which Canal de Isabel II entry it is for. Only needed when there is more than one."
+        }
+      }
+    },
+    "report_login": {
+      "name": "Report a failed login",
+      "description": "For the session helper: says that it could not log in, so the integration can tell the person.",
+      "fields": {
+        "result": {
+          "name": "Result",
+          "description": "refused: the portal rejected the credentials. challenge: the captcha asks for a person. failed: the portal did not answer as expected."
+        },
+        "entry_id": {
+          "name": "Entry",
+          "description": "Which Canal de Isabel II entry it is for. Only needed when there is more than one."
+        },
+        "detail": {
+          "name": "Detail",
+          "description": "What the portal answered."
+        },
+        "retry_at": {
+          "name": "Next try",
+          "description": "When the helper will try again (ISO date and time)."
+        },
+        "helper_url": {
+          "name": "Helper address",
+          "description": "Link to the helper's browser."
         }
       }
     }
@@ -54,16 +120,19 @@
   },
   "exceptions": {
     "no_entry": {
-      "message": "There is no Canal de Isabel II entry to give the session to."
+      "message": "There is no Canal de Isabel II entry."
     },
     "several_entries": {
       "message": "Canal de Isabel II is set up more than once: say which entry with entry_id."
+    },
+    "not_loaded": {
+      "message": "The Canal de Isabel II entry is not loaded."
     },
     "session_rejected": {
       "message": "The portal did not accept this session."
     },
     "portal_unreachable": {
-      "message": "The session could not be checked with the portal: {detail}"
+      "message": "Could not check the session with the portal: {detail}"
     }
   }
 }

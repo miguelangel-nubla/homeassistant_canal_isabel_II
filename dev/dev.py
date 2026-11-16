@@ -2,11 +2,13 @@
 """Drive the throwaway Home Assistant in this folder (standard library only).
 
     python3 dev/dev.py setup      create the user, add the integration
-    python3 dev/dev.py session    hand the instance a new session cookie
+    python3 dev/dev.py wanted     what the session helper would be asked to do
+    python3 dev/dev.py session    deliver a session cookie, as the helper does
     python3 dev/dev.py status     entry state, sensors and stored statistics
 
-The session cookie (JSESSIONID) is read from standard input, so it never
-shows up in the shell history or the process list.
+Secrets are read from standard input, so they never show up in the shell
+history or the process list: for setup, the document number and the
+password of the virtual office, one per line; for session, a JSESSIONID.
 """
 import json
 import os
@@ -90,26 +92,40 @@ def access_token():
     )["access_token"]
 
 
-def read_cookie():
-    cookie = sys.stdin.readline().strip()
-    if not cookie:
-        sys.exit("Give the JSESSIONID on standard input")
-    return cookie
+def read_line(what):
+    line = sys.stdin.readline().strip()
+    if not line:
+        sys.exit(f"Give {what} on standard input")
+    return line
 
 
 def setup():
     wait_for_ha()
     auth = access_token()
-    cookie = read_cookie()
+    account = {
+        "document": read_line("the document number"),
+        "password": read_line("the password"),
+        "profile": os.environ.get("DEV_PROFILE", "particular"),
+    }
     flow = call("/api/config/config_entries/flow", {"handler": DOMAIN}, auth)
-    result = call(f"/api/config/config_entries/flow/{flow['flow_id']}", {"jsessionid": cookie}, auth)
+    result = call(f"/api/config/config_entries/flow/{flow['flow_id']}", account, auth)
     print("config flow:", result.get("type"), result.get("errors") or result.get("reason") or "")
+
+
+def wanted():
+    wait_for_ha()
+    answer = call(f"/api/services/{DOMAIN}/session_request?return_response", {}, access_token())
+    requests = answer["service_response"]["requests"]
+    for request in requests:
+        print("wants a session:", request["entry_id"], request["profile"], "(credentials not shown)")
+    if not requests:
+        print("no entry wants a session")
 
 
 def session():
     wait_for_ha()
-    call(f"/api/services/{DOMAIN}/set_session", {"jsessionid": read_cookie()}, access_token())
-    print("session handed over")
+    call(f"/api/services/{DOMAIN}/set_session", {"jsessionid": read_line("the JSESSIONID")}, access_token())
+    print("session delivered")
 
 
 def status():
@@ -143,7 +159,7 @@ if __name__ == "__main__":
     CONFIG.mkdir(exist_ok=True)
     if "DEV_HA_STATE" not in os.environ and not (CONFIG / "configuration.yaml").exists():
         (CONFIG / "configuration.yaml").write_text(CONFIGURATION)
-    commands = {"setup": setup, "session": session, "status": status}
+    commands = {"setup": setup, "wanted": wanted, "session": session, "status": status}
     if len(sys.argv) != 2 or sys.argv[1] not in commands:
         sys.exit(__doc__)
     commands[sys.argv[1]]()
