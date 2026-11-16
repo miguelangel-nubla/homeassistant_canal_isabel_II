@@ -4,6 +4,12 @@ Integración que lleva a Home Assistant el consumo de agua de tu contrato del [C
 
 El Canal no ofrece una API pública. Los datos se leen de la oficina virtual, y para entrar en ella hace falta un navegador de verdad, porque su formulario de acceso lleva un captcha. Por eso la integración trabaja con un **ayudante de sesión**: un navegador que se ejecuta en tu servidor e inicia sesión con tu documento y tu contraseña cada vez que la integración va a leer datos.
 
+## Apoya el proyecto
+
+¿Te resulta útil? Puedes [patrocinarlo en GitHub](https://github.com/sponsors/miguelangel-nubla). Cada aportación ayuda a mantenerlo al día cuando el Canal cambia su web.
+
+[![Patrocinar en GitHub](https://img.shields.io/badge/Patrocinar-GitHub-blue?style=for-the-badge&logo=github-sponsors)](https://github.com/sponsors/miguelangel-nubla)
+
 ## Qué obtienes
 
 El Canal publica los datos con medio día o un día de retraso, así que nada de esto es en tiempo real: describe el último día publicado.
