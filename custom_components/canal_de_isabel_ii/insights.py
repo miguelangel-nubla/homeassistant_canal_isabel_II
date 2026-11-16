@@ -21,6 +21,9 @@ PORTAL_TZ = ZoneInfo("Europe/Madrid")
 # the portal publishes the repeated hour once, so it has 24 as well.
 FULL_DAY_HOURS = 23
 
+# The leak check, with the defaults of its two settings (each contract can
+# have its own, see number.py).
+#
 # A household uses no water for some hour of every day or two. This many
 # published hours in a row without one at rest is taken as a possible leak.
 LEAK_HOURS = 48
@@ -50,7 +53,11 @@ class Insights:
     possible_leak: Optional[bool] = None
 
 
-def insights(hours: Dict[datetime, float]) -> Insights:
+def insights(
+    hours: Dict[datetime, float],
+    rest_liters: float = REST_LITERS,
+    leak_hours: float = LEAK_HOURS,
+) -> Insights:
     """Summarise {start of the hour (aware): liters} for one contract."""
     if not hours:
         return Insights()
@@ -65,14 +72,14 @@ def insights(hours: Dict[datetime, float]) -> Insights:
     without_pause = 0
     last_pause = None
     for start in newest_first:
-        if hours[start] < REST_LITERS:
+        if hours[start] < rest_liters:
             last_pause = start
             break
         without_pause += 1
 
-    if without_pause >= LEAK_HOURS:
+    if without_pause >= leak_hours:
         possible_leak: Optional[bool] = True
-    elif last_pause is not None or len(newest_first) >= LEAK_HOURS:
+    elif last_pause is not None or len(newest_first) >= leak_hours:
         possible_leak = False
     else:
         possible_leak = None  # fewer hours than it takes to tell, none of them at rest

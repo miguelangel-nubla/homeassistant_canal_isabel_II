@@ -138,6 +138,14 @@
       "possible_leak": {
         "name": "Posible fuga"
       }
+    },
+    "number": {
+      "rest_liters": {
+        "name": "Fuga: consumo que cuenta como reposo"
+      },
+      "leak_hours": {
+        "name": "Fuga: horas sin reposo para avisar"
+      }
     }
   },
   "exceptions": {

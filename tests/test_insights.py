@@ -66,3 +66,10 @@ def test_the_trickle_a_meter_reports_at_rest_is_not_water_in_use():
     assert result.last_day_minimum == 0.02
     # At the limit itself the water counts as running.
     assert insights(hours([REST_LITERS] * LEAK_HOURS)).possible_leak is True
+
+
+def test_the_limits_can_be_set():
+    trickle = hours([0.02] * 30)
+    assert insights(trickle).possible_leak is False
+    assert insights(trickle, rest_liters=0.0, leak_hours=24).possible_leak is True
+    assert insights(trickle, rest_liters=0.0, leak_hours=31).possible_leak is None

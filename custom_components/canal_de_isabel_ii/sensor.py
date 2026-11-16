@@ -58,9 +58,9 @@ def _meter_for(data: Optional[PortalData], contract_id: str) -> Optional[MeterSu
     return None
 
 
-def insights_for(data: Optional[PortalData], contract_id: str) -> Insights:
+def insights_for(data: Optional[PortalData], contract_id: str, **settings: float) -> Insights:
     """What the readings of a contract say (see insights.py)."""
-    return insights(hourly_totals(_readings_for(data, contract_id)).get(contract_id, {}))
+    return insights(hourly_totals(_readings_for(data, contract_id)).get(contract_id, {}), **settings)
 
 
 async def async_setup_entry(
