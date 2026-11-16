@@ -21,6 +21,7 @@ from homeassistant.helpers.selector import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    BASE_URL,
     CONF_CREDENTIALS_SET_AT,
     CONF_DOCUMENT,
     CONF_PASSWORD,
@@ -81,7 +82,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title=DEFAULT_NAME, data=data)
         return self.async_show_form(
-            step_id="user", data_schema=_schema(user_input or {}), errors=errors
+            step_id="user",
+            data_schema=_schema(user_input or {}),
+            errors=errors,
+            description_placeholders={"portal_url": f"{BASE_URL}/"},
         )
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:

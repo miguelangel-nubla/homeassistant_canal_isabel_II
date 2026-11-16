@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Canal de Isabel II",
-        "description": "Los datos con los que entras en la [oficina virtual](https://oficinavirtual.canaldeisabelsegunda.es/). El inicio de sesión lo hace el ayudante de sesión, que tiene que estar instalado: sin él no se descarga nada.",
+        "description": "Los datos con los que entras en la [oficina virtual]({portal_url}). El inicio de sesión lo hace el ayudante de sesión, que tiene que estar instalado: sin él no se descarga nada.",
         "data": {
           "document": "Número de documento",
           "password": "Contraseña",

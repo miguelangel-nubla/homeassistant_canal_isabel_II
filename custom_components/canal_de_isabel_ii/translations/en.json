@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Canal de Isabel II",
-        "description": "The details you log in to the [virtual office](https://oficinavirtual.canaldeisabelsegunda.es/) with. The login is done by the session helper, which has to be installed: without it nothing is downloaded.",
+        "description": "The details you log in to the [virtual office]({portal_url}) with. The login is done by the session helper, which has to be installed: without it nothing is downloaded.",
         "data": {
           "document": "Document number",
           "password": "Password",
