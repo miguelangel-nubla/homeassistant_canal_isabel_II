@@ -88,6 +88,36 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={"portal_url": f"{BASE_URL}/"},
         )
 
+    async def async_step_reconfigure(
+        self, user_input: Optional[Dict[str, Any]] = None
+    ) -> ConfigFlowResult:
+        """Change the account at any time, from the entry's menu.
+
+        Re-authentication only comes up when the portal has refused a login.
+        This is for the person who changed the password at the portal, or
+        picked the wrong profile, and does not want to wait for that.
+        """
+        entry = self._get_reconfigure_entry()
+        errors: Dict[str, str] = {}
+        if user_input is not None:
+            data = _credentials(user_input)
+            if not data[CONF_DOCUMENT]:
+                errors[CONF_DOCUMENT] = "document_required"
+            else:
+                await self.async_set_unique_id(data[CONF_DOCUMENT])
+                for other in self._async_current_entries():
+                    if other.entry_id != entry.entry_id and other.unique_id == data[CONF_DOCUMENT]:
+                        return self.async_abort(reason="already_configured")
+                # Everything else in the entry stays, the history included.
+                return self.async_update_reload_and_abort(
+                    entry, unique_id=data[CONF_DOCUMENT], data_updates=data
+                )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_schema(user_input or entry.data),
+            errors=errors,
+        )
+
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         """The portal refused the credentials, or the entry never had any."""
         # The helper passes on what the portal said when it refused the login.
