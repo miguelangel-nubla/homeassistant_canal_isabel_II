@@ -80,8 +80,13 @@ dev/haos.sh stop
 ## Releasing
 
 1. Set `version` in `custom_components/canal_de_isabel_ii/manifest.json` and merge.
-2. Publish a GitHub release tagged `v<version>` on `main`.
-3. The release builds the helper image tagged `<version>`. With the `DISPATCH_TOKEN` secret set it also tells [`hassio-repository`](https://github.com/miguelangel-nubla/hassio-repository) to pick up the new add-on version; without it, send that repository an `update` dispatch with `app: canal-session-helper` by hand.
+2. Write the release notes in a file and run `dev/release.sh v<version> <notes file>` from an up-to-date `main`.
+
+The script prepares the release as a draft and pushes the tag. The workflow "Session helper image" then runs the helper's end-to-end test, builds the image tagged `<version>`, and only after that publishes the release and tells [`hassio-repository`](https://github.com/miguelangel-nubla/hassio-repository) to pick up the new add-on version (secret `DISPATCH_TOKEN`). It takes about eight minutes.
+
+- Until the image exists nothing is visible: the Marketplace does not offer the integration, and the add-on repository does not offer the app. If the test or the build fails, the draft stays a draft: fix it, delete the tag and the draft, and start again.
+- A tag with a suffix (`v2026.11.10-rc.1`) makes a pre-release: its image is built and the release published as a pre-release, and the add-on repository is not told.
+- Do not publish the draft by hand: nothing would have checked that its image exists.
 
 ## Marketplace listing
 
