@@ -58,3 +58,15 @@ dev/haos.sh stop
 1. Set `version` in `custom_components/canal_de_isabel_ii/manifest.json` and merge.
 2. Publish a GitHub release tagged `v<version>` on `main`.
 3. The release builds the helper image tagged `<version>`. With the `DISPATCH_TOKEN` secret set it also tells [`hassio-repository`](https://github.com/miguelangel-nubla/hassio-repository) to pick up the new add-on version; without it, send that repository an `update` dispatch with `app: canal-session-helper` by hand.
+
+## Marketplace listing
+
+The integration is installable today as a custom repository. Inclusion in the default Marketplace catalog was requested on 2026-11-16 in [hacs/default#14264](https://github.com/hacs/default/pull/14264); reviews there take months.
+
+While that pull request is open, and afterwards to stay listed:
+
+- `Marketplace validation` (`.github/workflows/validate.yaml`) and hassfest must keep passing, without ignored checks.
+- `hacs.json` needs at least `name`, and `manifest.json` needs `documentation`, `issue_tracker`, `codeowners` and a `version` that matches the release.
+- The brand images live in `custom_components/canal_de_isabel_ii/brand/`.
+- The repository keeps its description, topics and issues enabled, and publishes full releases, not just tags.
+- Do not request reviews on the catalog pull request. Changes to it are pushed to the branch `add-canal-de-isabel-ii` of the fork `miguelangel-nubla/default`.
