@@ -573,7 +573,8 @@ def serve(tab: Tab, request: dict, memory: dict) -> None:
         deliver(tab, request, auto)
         return
     if outcome == LOGIN_REFUSED:
-        log.warning("The portal refused the login%s.", f": {detail}" if detail else "")
+        # The portal's own message may end in a period of its own.
+        log.warning("The portal refused the login%s.", f": {detail.rstrip('.')}" if detail else "")
     elif outcome == LOGIN_CHALLENGE:
         log.warning("The captcha of the login form asks for a person.")
     else:
