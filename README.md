@@ -1,5 +1,7 @@
 # Canal de Isabel II para Home Assistant
 
+*[Read in English](README.en.md)*
+
 Integración que lleva a Home Assistant el consumo de agua de tu contrato del [Canal de Isabel II](https://oficinavirtual.canaldeisabelsegunda.es/) (Madrid): el consumo hora a hora, listo para el panel de Energía, y la lectura del contador.
 
 El Canal no ofrece una API pública. Los datos se leen de la oficina virtual, y para entrar en ella hace falta un navegador de verdad, porque su formulario de acceso lleva un captcha. Por eso la integración trabaja con un **ayudante de sesión**: un navegador que se ejecuta en tu servidor e inicia sesión con tu documento y tu contraseña cada vez que la integración va a leer datos.

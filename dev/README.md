@@ -1,6 +1,6 @@
 # Development
 
-User documentation is in the [main README](../README.md) (integration) and in [`canal-session-helper/DOCS.md`](../canal-session-helper/DOCS.md) (session helper). This page is about working on the code.
+User documentation is in the [main README](../README.md) (integration) and in [`canal-session-helper/DOCS.md`](../canal-session-helper/DOCS.md) (session helper), both in Spanish, with English versions next to them (`README.en.md`, `DOCS.en.md`). The Spanish text is the original: change it first and carry the change over to the English one in the same commit. This page is about working on the code.
 
 ## Layout
 

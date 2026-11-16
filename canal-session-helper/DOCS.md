@@ -1,5 +1,7 @@
 # Ayudante de sesión del Canal de Isabel II
 
+*[Read in English](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/blob/main/canal-session-helper/DOCS.en.md)*
+
 La integración [Canal de Isabel II][integration] lee tu consumo de agua de la oficina virtual, y para entrar en ella hace falta un navegador de verdad. Este ayudante es ese navegador: se ejecuta en tu servidor e inicia sesión por ti cuando la integración lo necesita.
 
 1. Cada minuto pregunta a Home Assistant si la integración necesita una sesión. Esa pregunta no sale de tu red.
