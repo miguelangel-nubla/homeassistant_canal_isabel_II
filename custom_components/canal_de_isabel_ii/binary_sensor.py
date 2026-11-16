@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
-from .insights import LEAK_HOURS
+from .insights import LEAK_HOURS, REST_LITERS
 from .sensor import ContractEntity, insights_for
 
 
@@ -38,11 +38,11 @@ async def async_setup_entry(
 
 
 class CanalIsabelIILeakSensor(ContractEntity, BinarySensorEntity):
-    """On when the meter has not stopped for two days of published hours.
+    """On when the meter has not rested for two days of published hours.
 
-    A household uses no water at all for some hour of every day or two. A
-    meter that never rests points at a dripping cistern or tap, or a leak
-    after the meter. The portal publishes with a day of delay, so this
+    A household uses no water for some hour of every day or two. A meter
+    that never rests points at a dripping cistern or tap, or a leak after
+    the meter. The portal publishes with a day of delay, so this
     catches the leaks that last, not a burst pipe.
     """
 
@@ -63,6 +63,7 @@ class CanalIsabelIILeakSensor(ContractEntity, BinarySensorEntity):
         return {
             "hours_without_pause": found.hours_without_pause,
             "hours_for_a_leak": LEAK_HOURS,
-            "last_hour_without_consumption": found.last_pause.isoformat() if found.last_pause else None,
+            "liters_per_hour_at_rest": REST_LITERS,
+            "last_hour_at_rest": found.last_pause.isoformat() if found.last_pause else None,
             "data_until": found.data_until.isoformat() if found.data_until else None,
         }

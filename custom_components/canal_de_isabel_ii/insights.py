@@ -21,10 +21,14 @@ PORTAL_TZ = ZoneInfo("Europe/Madrid")
 # the portal publishes the repeated hour once, so it has 24 as well.
 FULL_DAY_HOURS = 23
 
-# A household uses no water at all for some hour of every day or two. This
-# many published hours in a row with consumption in each of them is taken as
-# a possible leak.
+# A household uses no water for some hour of every day or two. This many
+# published hours in a row without one at rest is taken as a possible leak.
 LEAK_HOURS = 48
+# An hour is at rest below this many liters. Not zero: meters report a few
+# hundredths of a liter in many hours in which nothing is in use. Measured on
+# a year of one household (2026-11): with zero as the limit, six alarms, five
+# of them made of such hours; with one liter, the single real one.
+REST_LITERS = 1.0
 
 
 @dataclass(frozen=True)
@@ -37,10 +41,10 @@ class Insights:
     last_day: Optional[date] = None
     last_day_liters: Optional[float] = None
     last_day_minimum: Optional[float] = None
-    # Published hours with consumption, counted back from the newest one
-    # until an hour without any.
+    # Published hours with water in use, counted back from the newest one
+    # until an hour at rest.
     hours_without_pause: int = 0
-    # Start of the newest hour without consumption, if there is one.
+    # Start of the newest hour at rest, if there is one.
     last_pause: Optional[datetime] = None
     # None while there are not enough hours to tell.
     possible_leak: Optional[bool] = None
@@ -61,7 +65,7 @@ def insights(hours: Dict[datetime, float]) -> Insights:
     without_pause = 0
     last_pause = None
     for start in newest_first:
-        if hours[start] <= 0:
+        if hours[start] < REST_LITERS:
             last_pause = start
             break
         without_pause += 1
