@@ -76,6 +76,7 @@ dev/haos.sh stop
 - `dev/haos_addon.py <method> <endpoint> [json]` calls the Supervisor API (add a repository, install or start an add-on). It needs `aiohttp` and these variables, which also point `dev/dev.py` at the VM: `DEV_HA_URL=http://127.0.0.1:18124 DEV_HA_STATE=dev/haos`.
 - Home Assistant OS 18 serves its web interface on port 80, which is what `haos.sh` forwards.
 - The VM's disk is in `dev/haos`, which git ignores.
+- To try a change to the app before releasing it (its `apparmor.txt`, for one), copy `config.yaml` and the files it needs to `/mnt/data/supervisor/apps/local/canal-session-helper` on the VM with `version` set to a published image tag, reload the store (`haos_addon.py post /store/reload`) and install `local_canal-session-helper`. `dmesg | grep DENIED` on the console shows what the profile refuses.
 
 ## Releasing
 
