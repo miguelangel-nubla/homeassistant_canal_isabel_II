@@ -6,15 +6,25 @@ El Canal no ofrece una API pública. Los datos se leen de la oficina virtual, y 
 
 ## Qué obtienes
 
-Por cada contrato:
+El Canal publica los datos con medio día o un día de retraso, así que nada de esto es en tiempo real: describe el último día publicado.
 
-| Qué | Dónde | Para qué |
-|-----|---------------|----------|
-| Estadística horaria | `canal_de_isabel_ii:consumption_<contrato>` | Histórico de consumo en litros. Es la que se añade al panel de Energía. |
-| Sensor **Consumo** | en el dispositivo `Canal de Isabel II <contrato>` | Litros de la última hora publicada por el Canal. |
-| Sensor **Lectura del contador** | en el mismo dispositivo | Lectura absoluta en m³, la cifra que aparece en la factura. |
+Por cada contrato, en el dispositivo `Canal de Isabel II <contrato>`:
 
-El Canal publica los datos con medio día o un día de retraso, así que no es un contador en tiempo real.
+| Qué | Para qué |
+|-----|----------|
+| Estadística horaria `canal_de_isabel_ii:consumption_<contrato>` | Histórico de consumo en litros, hora a hora. Es la que se añade al panel de Energía. |
+| **Lectura del contador** | Lectura absoluta en m³, la cifra que aparece en la factura. |
+| **Consumo del último día** | Litros del último día que el Canal ha publicado completo. La fecha va en el atributo `date`. |
+| **Caudal mínimo del último día** | Los litros de la hora más tranquila de ese día. En una casa sin fugas es 0. |
+| **Posible fuga** | Se activa cuando el contador no ha parado ni una hora en las últimas 48 horas publicadas. |
+| **Datos hasta** | Hasta qué hora ha publicado datos el Canal. Sirve para saber si están al día. |
+| **Consumo de la última hora** | Litros de la última hora publicada. Desactivado por defecto: esa hora ya pasó hace mucho cuando se publica. |
+
+### Posible fuga
+
+En una casa siempre hay alguna hora del día, normalmente de madrugada, en la que no se gasta nada. Un contador que no descansa durante dos días seguidos suele ser una cisterna o un grifo que gotea, o una fuga después del contador. Como los datos llegan con un día de retraso, sirve para las fugas que duran, no para una rotura. Un riego por goteo, un descalcificador o una casa en la que se usa agua a todas horas también lo activan.
+
+La oficina virtual tiene además sus propias alarmas de consumo (por ejemplo, un máximo de litros al día), que avisan por SMS. La integración no las lee ni las cambia; con **Consumo del último día** puedes crear las tuyas en Home Assistant.
 
 ## Instalación
 

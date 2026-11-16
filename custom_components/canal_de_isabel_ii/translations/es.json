@@ -118,11 +118,25 @@
   },
   "entity": {
     "sensor": {
+      "last_day": {
+        "name": "Consumo del último día"
+      },
+      "minimum_flow": {
+        "name": "Caudal mínimo del último día"
+      },
+      "data_until": {
+        "name": "Datos hasta"
+      },
       "consumption": {
-        "name": "Consumo"
+        "name": "Consumo de la última hora"
       },
       "meter_reading": {
         "name": "Lectura del contador"
+      }
+    },
+    "binary_sensor": {
+      "possible_leak": {
+        "name": "Posible fuga"
       }
     }
   },

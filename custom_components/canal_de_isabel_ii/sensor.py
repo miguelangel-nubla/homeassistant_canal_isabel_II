@@ -1,9 +1,12 @@
 """Sensor platform for Canal de Isabel II.
 
 The hourly history lives in an external statistic (see statistics.py), which
-is what the Energy panel uses. The entities here only show the latest values.
+is what the Energy panel uses. The portal publishes it with half a day to a
+day of delay, so the sensors here do not show what is happening now: they
+show the meter reading and what the last day published in full was like.
 """
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import (
@@ -12,7 +15,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfVolume
+from homeassistant.const import EntityCategory, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -24,7 +27,8 @@ from homeassistant.helpers.update_coordinator import (
 
 from .api import PortalData
 from .const import DEFAULT_NAME, DOMAIN
-from .csv_parser import Reading
+from .csv_parser import Reading, hourly_totals
+from .insights import Insights, insights
 from .meter_parser import MeterSummary
 from .statistics import consumption_statistic_id
 
@@ -52,6 +56,11 @@ def _meter_for(data: Optional[PortalData], contract_id: str) -> Optional[MeterSu
     if contracts == {contract_id}:
         return data.meter
     return None
+
+
+def insights_for(data: Optional[PortalData], contract_id: str) -> Insights:
+    """What the readings of a contract say (see insights.py)."""
+    return insights(hourly_totals(_readings_for(data, contract_id)).get(contract_id, {}))
 
 
 async def async_setup_entry(
@@ -86,7 +95,15 @@ async def async_setup_entry(
                 )
                 if old_total:
                     registry.async_remove(old_total)
-                entities.append(CanalIsabelIIConsumptionSensor(coordinator, contract_id))
+                entities.extend(
+                    sensor(coordinator, contract_id)
+                    for sensor in (
+                        CanalIsabelIILastDaySensor,
+                        CanalIsabelIIMinimumFlowSensor,
+                        CanalIsabelIIDataUntilSensor,
+                        CanalIsabelIIConsumptionSensor,
+                    )
+                )
             if contract_id not in with_meter and _meter_for(data, contract_id) is not None:
                 with_meter.add(contract_id)
                 entities.append(CanalIsabelIIMeterReadingSensor(coordinator, contract_id))
@@ -99,8 +116,8 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(add_new_entities))
 
 
-class _ContractSensor(CoordinatorEntity, SensorEntity):
-    """Base for the sensors of one contract."""
+class ContractEntity(CoordinatorEntity):
+    """Base for the entities of one contract."""
 
     # The device carries the contract, so entity names stay short.
     _attr_has_entity_name = True
@@ -115,8 +132,83 @@ class _ContractSensor(CoordinatorEntity, SensorEntity):
         )
 
 
+class _ContractSensor(ContractEntity, SensorEntity):
+    """Base for the sensors of one contract."""
+
+
+class CanalIsabelIILastDaySensor(_ContractSensor):
+    """Liters used on the last day the portal has published in full."""
+
+    def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
+        super().__init__(coordinator, contract_id)
+        self._attr_translation_key = "last_day"
+        self._attr_unique_id = f"canal_ii_last_day_{contract_id}"
+        self._attr_native_unit_of_measurement = UnitOfVolume.LITERS
+        self._attr_device_class = SensorDeviceClass.VOLUME
+        # No state class, like the hourly sensor: the history is the statistic.
+        self._attr_suggested_display_precision = 0
+        self._attr_icon = "mdi:water"
+
+    @property
+    def native_value(self) -> Optional[float]:
+        return insights_for(self.coordinator.data, self._contract_id).last_day_liters
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        day = insights_for(self.coordinator.data, self._contract_id).last_day
+        return {
+            "date": day.isoformat() if day else None,
+            "statistic_id": consumption_statistic_id(self._contract_id),
+        }
+
+
+class CanalIsabelIIMinimumFlowSensor(_ContractSensor):
+    """The quietest hour of the last full day. Above zero, water never stopped."""
+
+    def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
+        super().__init__(coordinator, contract_id)
+        self._attr_translation_key = "minimum_flow"
+        self._attr_unique_id = f"canal_ii_minimum_flow_{contract_id}"
+        self._attr_native_unit_of_measurement = UnitOfVolumeFlowRate.LITERS_PER_HOUR
+        self._attr_device_class = SensorDeviceClass.VOLUME_FLOW_RATE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_suggested_display_precision = 1
+        self._attr_icon = "mdi:water-outline"
+
+    @property
+    def native_value(self) -> Optional[float]:
+        return insights_for(self.coordinator.data, self._contract_id).last_day_minimum
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        day = insights_for(self.coordinator.data, self._contract_id).last_day
+        return {"date": day.isoformat() if day else None}
+
+
+class CanalIsabelIIDataUntilSensor(_ContractSensor):
+    """Up to when the portal has published readings."""
+
+    def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
+        super().__init__(coordinator, contract_id)
+        self._attr_translation_key = "data_until"
+        self._attr_unique_id = f"canal_ii_data_until_{contract_id}"
+        self._attr_device_class = SensorDeviceClass.TIMESTAMP
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> Optional[datetime]:
+        return insights_for(self.coordinator.data, self._contract_id).data_until
+
+
 class CanalIsabelIIConsumptionSensor(_ContractSensor):
-    """Liters used in the most recent hour published by the portal."""
+    """Liters used in the most recent hour published by the portal.
+
+    That hour is long past when it is published, which makes this the least
+    useful of the sensors: it is off until someone turns it on. Installs
+    from before the other sensors existed keep it as they had it.
+    """
+
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: DataUpdateCoordinator, contract_id: str) -> None:
         super().__init__(coordinator, contract_id)
