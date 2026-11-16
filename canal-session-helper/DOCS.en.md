@@ -29,7 +29,9 @@ The form has an invisible captcha that decides by itself whether to let a login 
 
 Restarts do not change those waits. The notices go away when there is a session.
 
-At any time you can open the helper's browser and log in by hand: the helper notices and delivers that session as if it had logged in itself.
+At any time you can open the helper's browser and log in by hand: the helper notices and delivers that session as if it had logged in itself. While you are typing in it, the helper leaves the form alone.
+
+If you let the browser save your password when you log in by hand, nothing breaks: when the browser fills the form in by itself, the helper writes over it what you have set in the integration.
 
 It works out the type of document from the number: NIE if it starts with X, Y or Z, and NIF otherwise.
 

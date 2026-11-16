@@ -120,6 +120,18 @@ def each_account_gets_its_own_session(start, state) -> None:
     assert not reports(state), reports(state)
 
 
+def a_form_the_browser_filled_in_is_written_over(start, state) -> None:
+    with state.lock:
+        state.autofill = True
+    start()
+    state.want("one", fake_portal.DOCUMENT, fake_portal.PASSWORD)
+    wait_until("the session", lambda: sessions(state))
+    # At the first try, with what Home Assistant gave and nothing else.
+    assert len(state.login_posts) == 1, state.login_posts
+    assert state.login_posts[0]["numeroDocumento"] == fake_portal.DOCUMENT, state.login_posts
+    assert not reports(state), reports(state)
+
+
 def a_refused_login_is_reported_and_not_repeated(start, state) -> None:
     start()
     state.want("one", fake_portal.DOCUMENT, "wrong")
@@ -179,6 +191,7 @@ def a_captcha_challenge_asks_for_a_person(start, state) -> None:
 SCENARIOS = [
     logs_in_only_when_a_session_is_wanted,
     each_account_gets_its_own_session,
+    a_form_the_browser_filled_in_is_written_over,
     a_refused_login_is_reported_and_not_repeated,
     a_document_the_form_does_not_accept,
     a_captcha_challenge_asks_for_a_person,

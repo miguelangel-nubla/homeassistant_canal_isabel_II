@@ -76,6 +76,19 @@ LOGIN_PAGE = """<!doctype html>
     if (fits && filled) grecaptcha.enterprise.execute(recaptchaLogin);
   };
 </script>
+<script>
+  // A browser that has saved the credentials fills the form in by itself:
+  // when the page loads, and once more when a field first takes the focus,
+  // on top of whatever is being written in it.
+  if (%(autofill)s) {
+    const saved = {numeroDocumento: 'X1234567L', passwordFieldHidden: 'a password saved long ago'};
+    for (const [id, value] of Object.entries(saved)) {
+      const field = document.getElementById(id);
+      field.value = value;
+      field.addEventListener('focus', () => setTimeout(() => { field.value = value + field.value; }, 100), {once: true});
+    }
+  }
+</script>
 <script src="/recaptcha/enterprise.js?onload=renderRecaptchaLogin" async defer></script>
 </body></html>
 """
@@ -123,6 +136,7 @@ class State:
             self.login_posts = []   # the forms received, as dicts
             self.ha_calls = []      # (service, data)
             self.challenge = False  # the captcha asks for a person
+            self.autofill = False   # the browser fills the form in from saved passwords
             self.wants = {}         # entry id -> what session_request says about it
             self.refused = set()    # entries waiting for new credentials
 
@@ -197,7 +211,9 @@ def make_handler(state: State):
                 if not self._cookie():
                     with state.lock:
                         headers.append(("Set-Cookie", f"JSESSIONID={state.new_cookie('anon')}; Path=/; HttpOnly"))
-                self._send(200, LOGIN_PAGE % {"error": error}, headers=headers)
+                with state.lock:
+                    autofill = "true" if state.autofill else "false"
+                self._send(200, LOGIN_PAGE % {"error": error, "autofill": autofill}, headers=headers)
             elif url.path == "/recaptcha/enterprise.js":
                 with state.lock:
                     challenge = "true" if state.challenge else "false"

@@ -29,7 +29,9 @@ El formulario lleva un captcha invisible que decide por su cuenta si deja pasar.
 
 Los reinicios no cambian esas esperas. Los avisos desaparecen cuando hay sesión.
 
-En cualquier momento puedes abrir el navegador del ayudante e iniciar sesión a mano: el ayudante lo detecta y entrega esa sesión como si hubiera entrado él.
+En cualquier momento puedes abrir el navegador del ayudante e iniciar sesión a mano: el ayudante lo detecta y entrega esa sesión como si hubiera entrado él. Mientras estás escribiendo en él, el ayudante no toca el formulario.
+
+Si al entrar a mano dejas que el navegador guarde tu contraseña, no pasa nada: cuando el navegador rellena el formulario por su cuenta, el ayudante escribe encima lo que tienes puesto en la integración.
 
 El tipo de documento lo deduce del número: NIE si empieza por X, Y o Z, y NIF en los demás casos.
 
