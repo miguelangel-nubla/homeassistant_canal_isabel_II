@@ -22,6 +22,15 @@
           "password": "Password",
           "profile": "Profile"
         }
+      },
+      "reconfigure": {
+        "title": "Virtual office account",
+        "description": "Change the document number, the password or the profile the session helper logs in with. The password always has to be entered. On saving, the helper tries the login again even if it had given up after a refusal.",
+        "data": {
+          "document": "Document number",
+          "password": "Password",
+          "profile": "Profile"
+        }
       }
     },
     "error": {
@@ -29,7 +38,8 @@
     },
     "abort": {
       "reauth_successful": "Credentials saved. The session helper will log in within a minute.",
-      "already_configured": "This account is already configured."
+      "already_configured": "This account is already configured.",
+      "reconfigure_successful": "Account saved. The session helper will use it at the next login."
     }
   },
   "selector": {

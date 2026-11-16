@@ -22,6 +22,15 @@
           "password": "Contraseña",
           "profile": "Perfil"
         }
+      },
+      "reconfigure": {
+        "title": "Cuenta de la oficina virtual",
+        "description": "Cambia el número de documento, la contraseña o el perfil con los que el ayudante de sesión inicia sesión. La contraseña hay que escribirla siempre. Al guardar, el ayudante vuelve a intentar el inicio de sesión aunque lo hubiera dejado por un rechazo.",
+        "data": {
+          "document": "Número de documento",
+          "password": "Contraseña",
+          "profile": "Perfil"
+        }
       }
     },
     "error": {
@@ -29,7 +38,8 @@
     },
     "abort": {
       "reauth_successful": "Credenciales guardadas. El ayudante de sesión iniciará sesión en un minuto.",
-      "already_configured": "Esta cuenta ya está configurada."
+      "already_configured": "Esta cuenta ya está configurada.",
+      "reconfigure_successful": "Cuenta guardada. El ayudante de sesión la usará en el próximo inicio de sesión."
     }
   },
   "selector": {

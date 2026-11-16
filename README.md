@@ -87,6 +87,12 @@ Los avisos desaparecen solos cuando vuelve a haber sesión. Los detalles (cuánd
 
 Tus credenciales se guardan en Home Assistant, como las de cualquier otra integración, y solo se escriben en el formulario de la oficina virtual.
 
+### Cambiar la cuenta o los ajustes
+
+- **Documento, contraseña o perfil:** en [la página de la integración](https://my.home-assistant.io/redirect/integration/?domain=canal_de_isabel_ii), abre el menú de los tres puntos de la entrada y elige **Reconfigurar**. Hazlo cuando cambies la contraseña en la oficina virtual, sin esperar a que el portal la rechace.
+- **Aviso de fuga:** los dos límites están en la sección **Configuración** del dispositivo de cada contrato (ver [Posible fuga](#posible-fuga)).
+- **El ayudante** no tiene ajustes sobre tu cuenta.
+
 ### El captcha del portal: qué puede fallar
 
 El formulario de acceso de la oficina virtual está protegido por un captcha invisible (reCAPTCHA). No pide nada a quien entra: observa cada inicio de sesión y decide por su cuenta si lo deja pasar, si muestra una prueba (elegir imágenes, por ejemplo) o si lo rechaza. El ayudante no lo resuelve ni lo esquiva. Inicia sesión en un navegador de verdad, desde tu casa y con tu cuenta, y hasta ahora eso basta para que pase.
