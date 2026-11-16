@@ -41,5 +41,29 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "consumption": {
+        "name": "Consumption"
+      },
+      "meter_reading": {
+        "name": "Meter reading"
+      }
+    }
+  },
+  "exceptions": {
+    "no_entry": {
+      "message": "There is no Canal de Isabel II entry to give the session to."
+    },
+    "several_entries": {
+      "message": "Canal de Isabel II is set up more than once: say which entry with entry_id."
+    },
+    "session_rejected": {
+      "message": "The portal did not accept this session."
+    },
+    "portal_unreachable": {
+      "message": "The session could not be checked with the portal: {detail}"
+    }
   }
 }

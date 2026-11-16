@@ -8,11 +8,11 @@ El Canal no ofrece una API pública. La integración lee los datos de la oficina
 
 Por cada contrato:
 
-| Qué | Identificador | Para qué |
+| Qué | Dónde | Para qué |
 |-----|---------------|----------|
 | Estadística horaria | `canal_de_isabel_ii:consumption_<contrato>` | Histórico de consumo en litros. Es la que se añade al panel de Energía. |
-| Sensor de último consumo | `sensor.canal_de_isabel_ii_<contrato>_consumption` | Litros de la última hora publicada por el Canal. |
-| Sensor de lectura del contador | `sensor.canal_de_isabel_ii_<contrato>_meter_reading` | Lectura absoluta en m³, la cifra que aparece en la factura. |
+| Sensor **Consumo** | en el dispositivo `Canal de Isabel II <contrato>` | Litros de la última hora publicada por el Canal. |
+| Sensor **Lectura del contador** | en el mismo dispositivo | Lectura absoluta en m³, la cifra que aparece en la factura. |
 
 El Canal publica los datos con medio día o un día de retraso, así que no es un contador en tiempo real.
 

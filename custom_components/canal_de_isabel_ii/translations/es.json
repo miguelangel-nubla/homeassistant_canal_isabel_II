@@ -41,5 +41,29 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "consumption": {
+        "name": "Consumo"
+      },
+      "meter_reading": {
+        "name": "Lectura del contador"
+      }
+    }
+  },
+  "exceptions": {
+    "no_entry": {
+      "message": "No hay ninguna entrada de Canal de Isabel II a la que entregar la sesión."
+    },
+    "several_entries": {
+      "message": "Canal de Isabel II está configurado más de una vez: indica la entrada con entry_id."
+    },
+    "session_rejected": {
+      "message": "El portal no ha aceptado esta sesión."
+    },
+    "portal_unreachable": {
+      "message": "No se pudo comprobar la sesión con el portal: {detail}"
+    }
   }
 }

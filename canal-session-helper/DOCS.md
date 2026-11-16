@@ -16,7 +16,7 @@ La sesión se conserva aunque el ayudante se reinicie, mientras el portal la sig
 Para Home Assistant OS y Supervised. No hay token ni contraseña que configurar.
 
 1. Añade el repositorio `https://github.com/miguelangel-nubla/hassio-repository` en la tienda de complementos (**Ajustes > Complementos > Tienda > Repositorios**; en versiones recientes, **Ajustes > Aplicaciones**).
-2. Instala **Canal de Isabel II session helper** e inícialo.
+2. Instala **Ayudante de sesión del Canal de Isabel II** e inícialo.
 3. Abre su interfaz web (**Abrir interfaz web**, o activa **Mostrar en la barra lateral**).
 4. Inicia sesión en la oficina virtual.
 

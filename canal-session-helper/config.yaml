@@ -1,5 +1,5 @@
 ---
-name: Canal de Isabel II session helper
+name: Ayudante de sesión del Canal de Isabel II
 version: dev
 slug: canal-session-helper
 description: Navegador en el que inicias sesión en la oficina virtual del Canal de Isabel II; mantiene la sesión y se la entrega a la integración
