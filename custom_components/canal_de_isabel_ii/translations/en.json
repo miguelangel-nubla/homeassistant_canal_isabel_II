@@ -3,14 +3,14 @@
     "step": {
       "user": {
         "title": "Canal de Isabel II",
-        "description": "Log in to the virtual office in your browser and paste the value of the JSESSIONID cookie.",
+        "description": "Leave the field empty if you use the session helper: it will deliver the session. Otherwise log in to the virtual office in your browser and paste the value of the JSESSIONID cookie.",
         "data": {
-          "jsessionid": "JSESSIONID cookie"
+          "jsessionid": "JSESSIONID cookie (optional)"
         }
       },
       "reauth_confirm": {
-        "title": "Session expired",
-        "description": "The {account} session is no longer valid. Log in to the virtual office again and paste the new JSESSIONID cookie.",
+        "title": "A session is needed",
+        "description": "{account} needs a portal session. Log in through the session helper, or log in to the virtual office in your browser and paste the JSESSIONID cookie here.",
         "data": {
           "jsessionid": "JSESSIONID cookie"
         }

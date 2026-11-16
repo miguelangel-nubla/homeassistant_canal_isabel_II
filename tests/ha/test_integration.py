@@ -246,6 +246,18 @@ async def test_set_session_replaces_a_dead_session(recorder_mock, hass, portal):
     assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0)]
 
 
+async def test_set_session_completes_an_entry_added_without_a_cookie(recorder_mock, hass, portal):
+    entry = await setup_entry(hass, jsessionid="")
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+
+    await hass.services.async_call(DOMAIN, "set_session", {"jsessionid": "good"}, blocking=True)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0)]
+
+
 async def test_set_session_rejects_an_invalid_cookie(recorder_mock, hass, portal):
     entry = await setup_entry(hass)
     with pytest.raises(ServiceValidationError):

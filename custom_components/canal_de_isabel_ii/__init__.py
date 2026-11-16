@@ -108,7 +108,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Canal de Isabel II from a config entry."""
 
-    jsessionid = entry.data[CONF_JSESSIONID]
+    jsessionid = entry.data.get(CONF_JSESSIONID)
+    if not jsessionid:
+        # Added without a cookie: ask for a session. The session helper or
+        # the set_session service answers the request.
+        raise ConfigEntryAuthFailed("No session yet")
     api = CanalIsabelIIAPI(jsessionid)
 
     if CONF_SESSION_SET_AT not in entry.data:

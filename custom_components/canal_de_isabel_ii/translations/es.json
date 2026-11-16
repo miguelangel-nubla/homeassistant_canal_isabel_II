@@ -3,14 +3,14 @@
     "step": {
       "user": {
         "title": "Canal de Isabel II",
-        "description": "Inicia sesión en la oficina virtual desde tu navegador y pega el valor de la cookie JSESSIONID.",
+        "description": "Deja el campo vacío si usas el ayudante de sesión: él entregará la sesión. Si no, inicia sesión en la oficina virtual desde tu navegador y pega el valor de la cookie JSESSIONID.",
         "data": {
-          "jsessionid": "Cookie JSESSIONID"
+          "jsessionid": "Cookie JSESSIONID (opcional)"
         }
       },
       "reauth_confirm": {
-        "title": "Sesión caducada",
-        "description": "La sesión de {account} ya no es válida. Vuelve a iniciar sesión en la oficina virtual y pega la nueva cookie JSESSIONID.",
+        "title": "Hace falta una sesión",
+        "description": "{account} necesita una sesión del portal. Inicia sesión desde el ayudante de sesión, o inicia sesión en la oficina virtual con tu navegador y pega aquí la cookie JSESSIONID.",
         "data": {
           "jsessionid": "Cookie JSESSIONID"
         }

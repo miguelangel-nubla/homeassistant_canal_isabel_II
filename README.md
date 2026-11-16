@@ -30,21 +30,32 @@ Instalación manual: copia la carpeta `custom_components/canal_de_isabel_ii` de 
 
 ## Configuración
 
+La integración necesita la sesión de un navegador que haya iniciado sesión en la oficina virtual. El portal la cierra cada cierto tiempo (no documenta cuándo), así que lo cómodo es que algo la mantenga y te avise cuando haya que volver a entrar. De eso se encarga el ayudante de sesión.
+
+En ningún caso se guardan ni se envían tu usuario y tu contraseña: el inicio de sesión lo haces siempre tú.
+
+### Con el ayudante de sesión (recomendado)
+
+El ayudante es un navegador que se ejecuta como complemento de Home Assistant o como contenedor Docker en tu servidor.
+
+1. Instala el ayudante siguiendo [su guía](canal-session-helper/DOCS.md).
+2. En Home Assistant, ve a **Ajustes > Dispositivos y servicios > Añadir integración**, busca **Canal de Isabel II** y deja el campo de la cookie vacío.
+3. Abre el ayudante e inicia sesión en la oficina virtual.
+
+El ayudante entrega la sesión a la integración, la mantiene viva y crea una notificación en Home Assistant cuando el portal la cierra y hay que volver a iniciar sesión.
+
+### A mano
+
 1. Inicia sesión en la [oficina virtual](https://oficinavirtual.canaldeisabelsegunda.es/) con tu navegador.
 2. Abre las herramientas de desarrollador (F12) y ve a **Aplicación > Cookies** (*Almacenamiento > Cookies* en Firefox).
 3. Copia el valor de la cookie `JSESSIONID`.
-4. En Home Assistant, ve a **Ajustes > Dispositivos y servicios > Añadir integración**, busca **Canal de Isabel II** y pega el valor.
+4. Añade la integración como en el paso 2 de arriba y pega el valor.
 
-La primera descarga trae el último año de consumo horario. Después la integración vuelve a leer los últimos 30 días dos veces al día, de modo que las horas publicadas con retraso se rellenan solas.
+Cuando el portal cierre la sesión, Home Assistant te pedirá una nueva: repite los pasos y pégala en el aviso.
 
-### Cuando la sesión caduca
+### Qué se descarga
 
-La cookie es una sesión temporal del portal. La integración la mantiene viva con una comprobación cada 10 minutos, pero el portal acaba cerrándola y no documenta cuándo. Cuando ocurre, Home Assistant pide una sesión nueva. Hay dos formas de dársela:
-
-- **A mano:** repite los pasos de arriba y pega la cookie nueva en el aviso de reautenticación.
-- **Con el ayudante de sesión:** un navegador que se ejecuta en tu servidor, o como complemento de Home Assistant. Inicias sesión en él y él entrega la sesión, la vigila y te avisa cuando hay que volver a entrar. Está en [`canal-session-helper`](canal-session-helper/DOCS.md).
-
-En ningún caso se guardan ni se envían tu usuario y tu contraseña: el inicio de sesión lo haces siempre tú.
+La primera descarga trae el último año de consumo horario. Después la integración vuelve a leer los últimos 30 días dos veces al día, de modo que las horas publicadas con retraso se rellenan solas. Entre descargas comprueba la sesión cada 10 minutos para mantenerla viva.
 
 ## Panel de Energía
 
