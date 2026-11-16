@@ -176,7 +176,8 @@ class CanalIsabelIIMinimumFlowSensor(_ContractSensor):
         self._attr_native_unit_of_measurement = UnitOfVolumeFlowRate.LITERS_PER_HOUR
         self._attr_device_class = SensorDeviceClass.VOLUME_FLOW_RATE
         self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_suggested_display_precision = 1
+        # Two decimals: the trickle a meter reports at rest is hundredths of a liter.
+        self._attr_suggested_display_precision = 2
 
     @property
     def native_value(self) -> Optional[float]:
@@ -257,6 +258,8 @@ class CanalIsabelIIMeterReadingSensor(_ContractSensor):
         self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
         self._attr_device_class = SensorDeviceClass.WATER
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        # As on the bill: to the liter.
+        self._attr_suggested_display_precision = 3
         self._summary: Optional[MeterSummary] = _meter_for(coordinator.data, contract_id)
 
     def _handle_coordinator_update(self) -> None:

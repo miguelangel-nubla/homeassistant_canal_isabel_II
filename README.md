@@ -36,8 +36,8 @@ Cada contrato tiene dos ajustes, en la sección **Configuración** de su disposi
 
 | Ajuste | Por defecto | Para qué |
 |--------|-------------|----------|
-| **Fuga: consumo que cuenta como reposo** | 1 L/h | Súbelo si en tu casa hay algo que gasta un poco a todas horas y no quieres que cuente. Bájalo para enterarte de goteos más pequeños. |
-| **Fuga: horas sin reposo para avisar** | 48 h | Menos horas avisan antes y se equivocan más; más horas, al revés. |
+| **Fuga: caudal de reposo** | 1 L/h | Súbelo si en tu casa hay algo que gasta un poco a todas horas y no quieres que cuente. Bájalo para enterarte de goteos más pequeños. |
+| **Fuga: horas sin reposo** | 48 h | Menos horas avisan antes y se equivocan más; más horas, al revés. |
 
 La oficina virtual tiene además sus propias alarmas de consumo (por ejemplo, un máximo de litros al día), que avisan por SMS. La integración no las lee ni las cambia; con **Consumo del último día** puedes crear las tuyas en Home Assistant.
 
