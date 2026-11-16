@@ -1,0 +1,51 @@
+#include <tunables/global>
+
+# What the session helper may do as a Home Assistant app. It is a browser
+# that opens a website, so the point is to keep whatever a web page could
+# make it do inside the container: no kernel interfaces, no mounts, no
+# looking at other processes, and only the privileges the start needs.
+profile canal-session-helper flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # The start takes /data and steps down to an unprivileged user
+  # (entrypoint.sh). Nothing else needs a privilege.
+  capability chown,
+  capability dac_override,
+  capability fowner,
+  capability setuid,
+  capability setgid,
+
+  # The portal, Home Assistant and the remote view. No raw or packet sockets.
+  network inet stream,
+  network inet dgram,
+  network inet6 stream,
+  network inet6 dgram,
+  network netlink raw,
+  network unix,
+  unix,
+
+  # Its own processes only: the screen, the remote view, the browser.
+  signal (send, receive) peer=canal-session-helper,
+  signal (receive) peer=unconfined,
+  ptrace (read, trace) peer=canal-session-helper,
+
+  # Files of the container. What matters is what follows.
+  file,
+
+  deny mount,
+  deny umount,
+  deny pivot_root,
+
+  # The kernel's knobs.
+  deny @{PROC}/sys/kernel/** wklx,
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/kcore rwklx,
+  deny @{PROC}/kmem rwklx,
+  deny @{PROC}/mem rwklx,
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/firmware/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+}
