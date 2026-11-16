@@ -38,8 +38,8 @@ Each contract has two settings, in the **Configuration** section of its device, 
 
 | Setting | Default | What for |
 |---------|---------|----------|
-| **Leak: flow that counts as rest** | 1 L/h | Raise it if something in your house uses a little at all hours and you do not want it to count. Lower it to hear about smaller drips. |
-| **Leak: hours without rest to flag it** | 48 h | Fewer hours warn sooner and are wrong more often; more hours, the other way round. |
+| **Leak: rest flow** | 1 L/h | Raise it if something in your house uses a little at all hours and you do not want it to count. Lower it to hear about smaller drips. |
+| **Leak: hours without rest** | 48 h | Fewer hours warn sooner and are wrong more often; more hours, the other way round. |
 
 The virtual office also has its own consumption alarms (a maximum of liters a day, for example), which notify by SMS. The integration does not read or change them; with **Last day's consumption** you can build your own in Home Assistant.
 
