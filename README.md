@@ -59,6 +59,11 @@ Cada importación continúa la serie guardada, así que volver a descargar las m
 
 La primera descarga pide el último año completo de consumo horario; las siguientes, los últimos 30 días, de modo que las horas publicadas con retraso o una temporada sin sesión se rellenan solas.
 
+Limitaciones conocidas:
+
+- Si la cuenta tiene varios contratos, solo se lee el que el portal muestra seleccionado.
+- En el cambio de hora de otoño el portal publica 24 horas en lugar de 25, así que esa noche falta una hora o queda desplazada. El de primavera no está comprobado.
+
 > [!IMPORTANT]
 > **Si actualizas desde una versión anterior:** el histórico ya no se guarda en el sensor `Canal de Isabel II Total`, que se elimina. Tienes que volver a elegir la fuente de agua en el panel de Energía. Las estadísticas antiguas de ese sensor se pueden borrar desde **Herramientas para desarrolladores > Estadísticas**.
 

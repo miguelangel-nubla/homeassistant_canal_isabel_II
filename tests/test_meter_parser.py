@@ -41,3 +41,9 @@ def test_missing_date_still_gives_a_reading():
 def test_page_without_summary():
     assert parse_meter_summary("") is None
     assert parse_meter_summary("<html><body><form id='login'></form></body></html>") is None
+
+
+def test_thousands_separator_without_decimals():
+    assert parse_reading_m3("1.234m³") == 1234.0
+    assert parse_reading_m3("1.234,565m³") == 1234.565
+    assert parse_reading_m3("56.7m³") == 56.7

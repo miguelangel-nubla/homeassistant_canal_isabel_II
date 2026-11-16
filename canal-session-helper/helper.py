@@ -97,9 +97,9 @@ def send_session(jsessionid: str) -> bool:
     return call_ha("canal_de_isabel_ii/set_session", data)
 
 
-def notify_login_needed() -> None:
+def notify_login_needed() -> bool:
     where = f"[Open the helper browser]({HELPER_URL})" if HELPER_URL else "Open the helper browser"
-    call_ha(
+    return call_ha(
         "persistent_notification/create",
         {
             "notification_id": NOTIFICATION_ID,
@@ -241,16 +241,29 @@ def save_session(cookie: str) -> None:
 
 
 def wait_for_login(tab: Tab) -> None:
-    """Leave the page alone until a person has logged in."""
-    if not tab.url().startswith(BASE_URL):
-        tab.open(CONSUMPTION_URL)  # redirects to the login form
+    """Leave the page alone until a person has logged in.
+
+    The page is only reloaded when it sits on a portal page that should be
+    the consumption page, or on no portal page at all (a failed load), and
+    then at most once a minute.
+    """
+    notified = notify_login_needed()
+    last_try = time.monotonic()
+    last_open = float("-inf")
     while True:
         time.sleep(LOGIN_POLL)
+        now = time.monotonic()
+        if not notified and now - last_try >= RETRY_INTERVAL:
+            # Home Assistant was not reachable when the login was first needed.
+            notified = notify_login_needed()
+            last_try = now
         url = tab.url()
-        if url.startswith(f"{BASE_URL}/group/"):
+        inside = url.startswith(f"{BASE_URL}/group/")
+        if (inside or not url.startswith(BASE_URL)) and now - last_open >= RETRY_INTERVAL:
             tab.open(CONSUMPTION_URL)
-            if tab.logged_in():
-                return
+            last_open = time.monotonic()
+        if inside and tab.logged_in():
+            return
 
 
 def run(browser: subprocess.Popen) -> None:
@@ -268,7 +281,6 @@ def run(browser: subprocess.Popen) -> None:
             if not tab.logged_in():
                 save_session("")
                 log.info("Not logged in. Waiting for a login in the helper browser.")
-                notify_login_needed()
                 wait_for_login(tab)
                 log.info("Login detected.")
 
@@ -298,14 +310,16 @@ def main() -> None:
     if SUPERVISOR_TOKEN and not HELPER_URL:
         HELPER_URL = addon_ingress_url()
     while True:
-        browser = start_browser()
+        browser = None
         try:
+            browser = start_browser()
             run(browser)
         except Exception as err:  # the tab was closed, the browser crashed...
             log.warning("Restarting the browser after an error: %s", err)
         finally:
-            browser.kill()
-            browser.wait()
+            if browser is not None:
+                browser.kill()
+                browser.wait()
         time.sleep(5)
 
 

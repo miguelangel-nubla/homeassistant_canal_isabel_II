@@ -13,11 +13,12 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
-from custom_components.canal_de_isabel_ii.api import AuthError, PortalData
+from custom_components.canal_de_isabel_ii.api import AuthError, PortalData, PortalError
 from custom_components.canal_de_isabel_ii.const import (
     DOMAIN,
     HISTORY_DAYS,
     REFRESH_DAYS,
+    SESSION_EXPIRED,
     SESSION_OK,
 )
 from custom_components.canal_de_isabel_ii.csv_parser import Reading
@@ -25,6 +26,7 @@ from custom_components.canal_de_isabel_ii.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from custom_components.canal_de_isabel_ii.meter_parser import MeterSummary
+from custom_components.canal_de_isabel_ii.statistics import async_import_consumption
 
 CONTRACT = "999000001"
 STATISTIC_ID = f"{DOMAIN}:consumption_{CONTRACT}"
@@ -60,12 +62,17 @@ class FakePortal:
         return self.jsessionid in self.valid_sessions
 
     def probe(self):
+        if self.jsessionid not in self.valid_sessions:
+            return SESSION_EXPIRED, "HTTP 302 -> /c/portal/login"
         return SESSION_OK, None
 
     requested_days = []
+    broken = False
 
     def get_consumption_data(self, days=None):
         FakePortal.requested_days.append(days)
+        if FakePortal.broken:
+            raise PortalError("No CSV download link on the consumption page")
         if self.jsessionid not in self.valid_sessions:
             raise AuthError("Authentication failed: Redirected to login page")
         return self.data
@@ -75,6 +82,7 @@ class FakePortal:
 def portal():
     FakePortal.data = PortalData(readings=readings(0, [10, 20, 30]), meter=METER)
     FakePortal.requested_days = []
+    FakePortal.broken = False
     with patch("custom_components.canal_de_isabel_ii.CanalIsabelIIAPI", FakePortal):
         yield FakePortal
 
@@ -164,6 +172,47 @@ async def test_older_history_is_merged_before_existing_rows(recorder_mock, hass,
         (30.0, 60.0),
         (40.0, 100.0),
         (50.0, 150.0),
+    ]
+
+
+async def test_portal_error_at_setup_still_loads_and_recovers(recorder_mock, hass, portal):
+    portal.broken = True
+    entry = await setup_entry(hass)
+    # Loaded, so the session keeps its keep-alive and nothing hammers the portal.
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption") is None
+
+    portal.broken = False
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # The sensors appear with the first data, without a reload.
+    consumption = hass.states.get(f"sensor.canal_de_isabel_ii_{CONTRACT}_consumption")
+    assert float(consumption.state) == 30.0
+    assert await stored_statistics(hass) == [(10.0, 10.0), (20.0, 30.0), (30.0, 60.0)]
+
+
+async def test_history_is_asked_again_when_the_range_was_not_applied(recorder_mock, hass, portal):
+    portal.data = PortalData(readings=readings(0, [10]), meter=None, range_applied=False)
+    entry = await setup_entry(hass)
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert portal.requested_days == [HISTORY_DAYS, HISTORY_DAYS]
+
+
+async def test_imports_in_a_row_do_not_wait_for_the_recorder(recorder_mock, hass, portal):
+    # The second import runs before the recorder has written the first.
+    await async_import_consumption(hass, CONTRACT, {T0 + timedelta(hours=h): v for h, v in enumerate([10, 20, 30])})
+    await async_import_consumption(hass, CONTRACT, {T0 + timedelta(hours=h): v for h, v in ((2, 30), (3, 40))})
+
+    assert await stored_statistics(hass) == [
+        (10.0, 10.0),
+        (20.0, 30.0),
+        (30.0, 60.0),
+        (40.0, 100.0),
     ]
 
 

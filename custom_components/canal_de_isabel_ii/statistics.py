@@ -30,6 +30,9 @@ from .statistics_helpers import StatRow, merge_statistics
 
 _LOGGER = logging.getLogger(__name__)
 
+# hass.data key: rows handed to the recorder in this run, per statistic id.
+_PENDING = f"{DOMAIN}_written_statistics"
+
 
 def consumption_statistic_id(contract: str) -> str:
     """Return the external statistic id for a contract."""
@@ -59,6 +62,7 @@ async def async_import_consumption(
     )
     last_rows = last.get(statistic_id) or []
     last_sum = last_rows[0].get("sum") if last_rows else None
+    last_start = _as_utc(last_rows[0]["start"]) if last_rows else None
 
     stored = await recorder.async_add_executor_job(
         statistics_during_period,
@@ -70,18 +74,35 @@ async def async_import_consumption(
         None,
         {"state", "sum"},
     )
-    existing = [
-        StatRow(
+    by_start = {
+        _as_utc(row["start"]): StatRow(
             start=_as_utc(row["start"]),
             state=row.get("state") or 0.0,
             sum=row.get("sum") or 0.0,
         )
         for row in stored.get(statistic_id) or []
-    ]
+    }
+
+    # Statistics are written through the recorder's queue, so the rows of the
+    # previous import may not be readable yet (it does not write at all until
+    # Home Assistant has finished starting). Count them as stored, or the
+    # sums would start again from zero.
+    pending = hass.data.setdefault(_PENDING, {}).get(statistic_id, [])
+    if pending:
+        first = min(hourly)
+        by_start.update({row.start: row for row in pending if row.start >= first})
+        newest = pending[-1]
+        if last_start is None or newest.start >= last_start:
+            last_sum = newest.sum
+    existing = [by_start[start] for start in sorted(by_start)]
 
     rows = merge_statistics(hourly, existing, last_sum)
     if not rows:
         return 0
+    hass.data[_PENDING][statistic_id] = sorted(
+        {**{row.start: row for row in pending}, **{row.start: row for row in rows}}.values(),
+        key=lambda row: row.start,
+    )
 
     metadata = StatisticMetaData(
         has_sum=True,

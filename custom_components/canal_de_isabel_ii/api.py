@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -26,8 +27,8 @@ _LOGGER = logging.getLogger(__name__)
 # The portal's server sends its own certificate without the intermediate one
 # that links it to a trusted root. Browsers fetch the missing piece on their
 # own; Python does not, so the intermediate certificates are shipped here.
-# They are only added as extra links in the chain: the chain must still end
-# in a root that the system already trusts.
+# They are loaded as trusted certificates of their own: a chain that reaches
+# one of them is accepted without going on to the root.
 _CERTS_DIR = Path(__file__).parent / "certs"
 
 
@@ -61,6 +62,9 @@ class PortalData:
 
     readings: List[Reading]
     meter: Optional[MeterSummary]
+    # False when a date range was asked for but the page's date fields were
+    # not found, so only the portal's default range was read.
+    range_applied: bool = True
 
 class CanalIsabelIIAPI:
     """API Client for Canal de Isabel II."""
@@ -102,8 +106,6 @@ class CanalIsabelIIAPI:
 
         if response.status_code == 200 and "export-csv" in response.text:
             return SESSION_OK, None
-        if response.status_code >= 500:
-            return SESSION_ERROR, f"HTTP {response.status_code}"
 
         detail = f"HTTP {response.status_code}"
         # Drop the query and any ;jsessionid suffix: only the path is useful.
@@ -112,7 +114,15 @@ class CanalIsabelIIAPI:
             detail += f" -> {location}"
         elif response.status_code == 200:
             detail += " without the CSV export link"
-        return SESSION_EXPIRED, detail
+
+        # Only a redirect to the login page (or a plain refusal) says the
+        # session is over. Anything else, such as a maintenance page or an
+        # error, says nothing about the session.
+        if response.status_code in (401, 403) or (
+            300 <= response.status_code < 400 and "login" in location.lower()
+        ):
+            return SESSION_EXPIRED, detail
+        return SESSION_ERROR, detail
 
     def check_auth(self) -> bool:
         """Check if the session is valid."""
@@ -148,6 +158,7 @@ class CanalIsabelIIAPI:
 
         page_html = response.text
         soup = BeautifulSoup(page_html, 'html.parser')
+        range_applied = True
 
         # 2. Switch to Hourly Resolution
         resolution_select = soup.find("select", id="selectPeriodicidad")
@@ -170,12 +181,14 @@ class CanalIsabelIIAPI:
             data[select_name] = "Horaria"
 
             if days is not None:
+                range_applied = False
                 today = datetime.now(PORTAL_TZ).date()
                 date_from = form.find("input", id="fechaDesde1")
                 date_to = form.find("input", id="fechaHasta1")
                 if date_from and date_to and date_from.get("name") and date_to.get("name"):
                     data[date_from["name"]] = (today - timedelta(days=days)).isoformat()
                     data[date_to["name"]] = today.isoformat()
+                    range_applied = True
                 else:
                     _LOGGER.warning(
                         "Date range fields not found on the consumption page; "
@@ -183,12 +196,16 @@ class CanalIsabelIIAPI:
                     )
 
             _LOGGER.debug("Switching to Hourly resolution...")
-            post_response = self._http.post(form.get("action"), data=data, timeout=30)
-            if post_response.status_code == 200:
-                page_html = post_response.text
-                soup = BeautifulSoup(page_html, 'html.parser')
-            else:
-                _LOGGER.error("Failed to switch resolution, status: %s", post_response.status_code)
+            action = urljoin(response.url, form.get("action") or "")
+            post_response = self._http.post(action, data=data, timeout=30)
+            if "login" in post_response.url:
+                raise AuthError("Authentication failed: Redirected to login page")
+            if post_response.status_code != 200:
+                raise PortalError(
+                    f"Asking for hourly data returned HTTP {post_response.status_code}"
+                )
+            page_html = post_response.text
+            soup = BeautifulSoup(page_html, 'html.parser')
 
         # 3. Find CSV Link
         # The page links the same export as CSV and as XLSX.
@@ -208,8 +225,13 @@ class CanalIsabelIIAPI:
 
         # 4. Download and parse the CSV
         csv_response = self._http.get(csv_url, timeout=60)
+        if "login" in csv_response.url:
+            raise AuthError("Authentication failed: Redirected to login page")
         csv_response.raise_for_status()
-        readings = parse_csv(decode_csv(csv_response.content))
+        csv_text = decode_csv(csv_response.content)
+        if csv_text.lstrip()[:1] == "<":
+            raise PortalError("The CSV download returned a web page instead of data")
+        readings = parse_csv(csv_text)
         _LOGGER.debug("Downloaded %s hourly readings", len(readings))
 
         # 5. The absolute meter reading shown above the chart
@@ -217,4 +239,4 @@ class CanalIsabelIIAPI:
         if meter is None:
             _LOGGER.debug("No meter summary found on the consumption page")
 
-        return PortalData(readings=readings, meter=meter)
+        return PortalData(readings=readings, meter=meter, range_applied=range_applied)

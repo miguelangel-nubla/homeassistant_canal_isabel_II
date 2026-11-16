@@ -10,7 +10,7 @@ RUN apt-get update \
     && chown helper:helper /data \
     && chmod 1777 /tmp/.X11-unix
 
-COPY entrypoint.sh helper.py /app/
+COPY entrypoint.sh helper.py ingress_guard.py /app/
 COPY index.html /usr/share/novnc/index.html
 RUN chmod 755 /app/entrypoint.sh
 

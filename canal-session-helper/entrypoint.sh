@@ -46,6 +46,9 @@ fi
 
 SCREEN="${SCREEN_SIZE:-1280x800}"
 
+# A restarted container keeps its /tmp: the lock of the previous virtual
+# screen would stop the new one from starting.
+rm -f "/tmp/.X${DISPLAY#:}-lock" "/tmp/.X11-unix/X${DISPLAY#:}"
 Xvfb "$DISPLAY" -screen 0 "${SCREEN}x24" -nolisten tcp &
 sleep 1
 
@@ -57,9 +60,17 @@ else
 fi
 # shellcheck disable=SC2086
 x11vnc -display "$DISPLAY" $VNC_AUTH -forever -shared -localhost -quiet -bg -o /tmp/x11vnc.log >/dev/null
-# Listen on IPv6 too where the container has it (the socket then takes IPv4 as well): a proxy that resolves
-# this container to its IPv6 address would otherwise get "connection refused".
-if [ -e /proc/net/if_inet6 ]; then LISTEN="[::]:6080"; else LISTEN="6080"; fi
-websockify --web /usr/share/novnc "$LISTEN" localhost:5900 >/tmp/websockify.log 2>&1 &
+if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    # As an add-on there is no password: accept only Home Assistant's
+    # ingress, which has already authenticated the person.
+    websockify --web /usr/share/novnc 127.0.0.1:6081 localhost:5900 >/tmp/websockify.log 2>&1 &
+    python3 /app/ingress_guard.py 6080 6081 &
+else
+    # Listen on IPv6 too where the container has it (the socket then takes
+    # IPv4 as well): a proxy that resolves this container to its IPv6
+    # address would otherwise get "connection refused".
+    if [ -e /proc/net/if_inet6 ]; then LISTEN="[::]:6080"; else LISTEN="6080"; fi
+    websockify --web /usr/share/novnc "$LISTEN" localhost:5900 >/tmp/websockify.log 2>&1 &
+fi
 
 exec python3 -u /app/helper.py

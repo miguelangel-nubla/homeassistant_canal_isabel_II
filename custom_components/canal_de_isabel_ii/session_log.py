@@ -105,5 +105,9 @@ class SessionTracker:
         )
         await self._store.async_save(self._data())
 
+    async def async_close(self) -> None:
+        """Write anything pending now, so no delayed save outlives the entry."""
+        await self._store.async_save(self._data())
+
     def _data(self) -> Dict[str, Any]:
         return {"sessions": self._records}
