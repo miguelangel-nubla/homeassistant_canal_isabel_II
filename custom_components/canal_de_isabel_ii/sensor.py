@@ -44,10 +44,15 @@ def _readings_for(data: Optional[PortalData], contract_id: str) -> List[Reading]
 def _meter_for(data: Optional[PortalData], contract_id: str) -> Optional[MeterSummary]:
     """Return the page's meter summary if it belongs to this contract.
 
-    The page shows the summary of one contract only. It is matched by meter
-    number, or taken as-is when the CSV holds a single contract.
+    Each contract's own summary is used when the fetch could tell whose it
+    was. Otherwise the summary of the page is matched by meter number, or
+    taken as-is when the CSV holds a single contract.
     """
-    if data is None or data.meter is None:
+    if data is None:
+        return None
+    if contract_id in data.meters:
+        return data.meters[contract_id]
+    if data.meter is None:
         return None
     contracts = {reading.contract for reading in data.readings}
     meters = {reading.meter for reading in _readings_for(data, contract_id)}
