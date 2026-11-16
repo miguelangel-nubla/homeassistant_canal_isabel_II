@@ -60,7 +60,7 @@ from .const import (
 )
 from .csv_parser import hourly_totals
 from .session_log import SessionTracker, session_store
-from .statistics import async_import_consumption
+from .statistics import async_import_consumption, async_move_hours_back
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -133,6 +133,14 @@ def _pick_entry(hass: HomeAssistant, call: ServiceCall) -> ConfigEntry:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the services the session helper works with."""
     hass.data.setdefault(DOMAIN, {})
+    # Before anything is imported: hours stored by earlier versions sit one
+    # hour late.
+    try:
+        await async_move_hours_back(hass)
+    except Exception:  # pylint: disable=broad-except
+        # Tried again at the next start. Until then new hours land where
+        # they belong and older ones stay an hour late.
+        _LOGGER.exception("Could not move the stored hours one hour back")
 
     async def async_session_request(call: ServiceCall) -> ServiceResponse:
         """Tell the helper which entries want a session, with their credentials."""
