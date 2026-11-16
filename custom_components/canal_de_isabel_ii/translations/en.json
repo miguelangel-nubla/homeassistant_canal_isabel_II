@@ -10,7 +10,7 @@
       },
       "reauth_confirm": {
         "title": "A session is needed",
-        "description": "{account} needs a portal session. Log in through the session helper, or log in to the virtual office in your browser and paste the JSESSIONID cookie here.",
+        "description": "{account} needs a portal session. If you use the session helper, leave this open: it delivers a new session by itself, or notifies you if you have to log in in its browser. Otherwise log in to the virtual office in your browser and paste the JSESSIONID cookie here.",
         "data": {
           "jsessionid": "JSESSIONID cookie"
         }

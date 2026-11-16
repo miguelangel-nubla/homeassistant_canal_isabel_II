@@ -8,7 +8,7 @@ User documentation is in the [main README](../README.md) (integration) and in [`
 |---|---|
 | `custom_components/canal_de_isabel_ii/` | The integration. `csv_parser.py`, `statistics_helpers.py` and `meter_parser.py` have no Home Assistant imports and are tested on their own. |
 | `canal-session-helper/` | The session helper: one image, used as a plain container and as a Home Assistant add-on (`config.yaml`). |
-| `tests/` | Unit tests; `tests/ha/` runs the integration inside a real Home Assistant with a fake portal. |
+| `tests/` | Unit tests; `tests/ha/` runs the integration inside a real Home Assistant with a fake portal; `tests/helper/` runs the session helper's image against a fake portal. |
 | `dev/` | The tools below. |
 
 ## Tests
@@ -19,6 +19,15 @@ pytest
 ```
 
 CI runs the same suite, hassfest and the Marketplace validation on every pull request.
+
+The session helper has its own end-to-end test, which needs Docker. It builds the image and lets its browser log in to `tests/helper/fake_portal.py`, a stand-in for the virtual office and for Home Assistant:
+
+```sh
+python3 tests/helper/e2e.py                        # every scenario, about three minutes
+python3 tests/helper/e2e.py a_refused_login_is_not_repeated
+```
+
+CI runs it before publishing the image. The fake login form copies the ids and the behaviour of the real one (checked 2026-11-16): when the portal changes its form, update both `LOGIN_PAGE` there and the selectors at the top of `canal-session-helper/helper.py`.
 
 ## A local Home Assistant with the integration
 

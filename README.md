@@ -2,7 +2,7 @@
 
 Integración que lleva a Home Assistant el consumo de agua de tu contrato del [Canal de Isabel II](https://oficinavirtual.canaldeisabelsegunda.es/) (Madrid): el consumo hora a hora, listo para el panel de Energía, y la lectura del contador.
 
-El Canal no ofrece una API pública. La integración lee los datos de la oficina virtual con la sesión de un navegador en el que tú has iniciado sesión.
+El Canal no ofrece una API pública. La integración lee los datos de la oficina virtual con la sesión de un navegador que ha iniciado sesión en ella. Con el ayudante de sesión ese navegador entra solo, con tu documento y tu contraseña, cada vez que hace falta.
 
 ## Qué obtienes
 
@@ -30,19 +30,18 @@ Instalación manual: copia la carpeta `custom_components/canal_de_isabel_ii` de 
 
 ## Configuración
 
-La integración necesita la sesión de un navegador que haya iniciado sesión en la oficina virtual. El portal la cierra cada cierto tiempo (no documenta cuándo), así que lo cómodo es que algo la mantenga y te avise cuando haya que volver a entrar. De eso se encarga el ayudante de sesión.
-
-En ningún caso se guardan ni se envían tu usuario y tu contraseña: el inicio de sesión lo haces siempre tú.
+La integración necesita la sesión de un navegador que haya iniciado sesión en la oficina virtual. El portal la cierra cada cierto tiempo (no documenta cuándo) y su formulario de acceso lleva un captcha que solo funciona en un navegador de verdad. Por eso el inicio de sesión lo hace el ayudante de sesión, que es ese navegador, y no la integración.
 
 ### Con el ayudante de sesión (recomendado)
 
 El ayudante es un navegador que se ejecuta como complemento de Home Assistant o como contenedor Docker en tu servidor.
 
-1. Instala el ayudante siguiendo [su guía](canal-session-helper/DOCS.md).
-2. En Home Assistant, ve a **Ajustes > Dispositivos y servicios > Añadir integración**, busca **Canal de Isabel II** y deja el campo de la cookie vacío.
-3. Abre el ayudante e inicia sesión en la oficina virtual.
+1. En Home Assistant, ve a **Ajustes > Dispositivos y servicios > Añadir integración**, busca **Canal de Isabel II** y deja el campo de la cookie vacío.
+2. Instala el ayudante siguiendo [su guía](canal-session-helper/DOCS.md) y dale tu documento y tu contraseña de la oficina virtual.
 
-El ayudante entrega la sesión a la integración, la mantiene viva y crea una notificación en Home Assistant cuando el portal la cierra y hay que volver a iniciar sesión.
+A partir de ahí no hay nada más que hacer: el ayudante inicia sesión, entrega la sesión a la integración, la mantiene viva y vuelve a iniciar sesión cuando el portal la cierra. Solo si no lo consigue (el portal rechaza las credenciales o pide resolver un captcha) crea una notificación en Home Assistant para que entres tú desde su navegador.
+
+Tu documento y tu contraseña se quedan en la configuración del ayudante, en tu servidor, y solo se escriben en el formulario de la oficina virtual. Si prefieres no guardarlos, deja esos campos vacíos e inicia sesión a mano en el navegador del ayudante cada vez que te avise.
 
 ### A mano
 
@@ -51,7 +50,7 @@ El ayudante entrega la sesión a la integración, la mantiene viva y crea una no
 3. Copia el valor de la cookie `JSESSIONID`.
 4. Añade la integración como en el paso 2 de arriba y pega el valor.
 
-Cuando el portal cierre la sesión, Home Assistant te pedirá una nueva: repite los pasos y pégala en el aviso.
+Cuando el portal cierre la sesión, Home Assistant te pedirá una nueva: repite los pasos y pégala en el aviso. De esta forma la integración no puede iniciar sesión por sí misma.
 
 ### Qué se descarga
 
