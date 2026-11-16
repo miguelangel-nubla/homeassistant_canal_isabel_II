@@ -27,7 +27,9 @@ python3 tests/helper/e2e.py                        # every scenario, about three
 python3 tests/helper/e2e.py a_refused_login_is_not_repeated
 ```
 
-CI runs it before publishing the image. The fake login form copies the ids and the behaviour of the real one (checked 2026-11-16): when the portal changes its form, update both `LOGIN_PAGE` there and the selectors at the top of `canal-session-helper/helper.py`.
+CI runs it before publishing the image. The fake login page copies the ids and the behaviour of the real one (checked 2026-11-16), including the cookie dialog that covers the login button: when the portal changes its page, update both `LOGIN_PAGE` there and the selectors at the top of `canal-session-helper/helper.py`.
+
+The fake portal cannot show what the real one does with a new browser. Before releasing a change to the login, also start the image against the real portal with an empty `/data`.
 
 ## A local Home Assistant with the integration
 

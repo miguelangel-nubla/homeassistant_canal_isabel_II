@@ -11,6 +11,7 @@ possible does it ask for a login through a Home Assistant notification.
 The login form runs an invisible reCAPTCHA, which is why the login happens
 in a real browser. Nothing here answers or avoids it: if it asks for a
 challenge, or the portal refuses the login, a person is asked to step in.
+The portal's cookie dialog is answered with "allow all".
 """
 import glob
 import hashlib
@@ -115,6 +116,15 @@ CAPTCHA_CHALLENGE_JS = """
     return visible;
 })
 """
+# The portal asks about cookies with a Cookiebot dialog, which stays on top
+# of the page until it is answered. The helper answers "allow all": with
+# fewer cookies parts of the portal may not work.
+COOKIES_UNANSWERED_JS = (
+    "typeof Cookiebot !== 'undefined' && !Cookiebot.consented && !Cookiebot.declined"
+)
+COOKIES_ALLOW_ALL_ID = "CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll"
+COOKIES_BUTTON_JS = f"!!(document.getElementById('{COOKIES_ALLOW_ALL_ID}') || {{}}).offsetParent"
+
 # What is written in the elements that match a selector and are on screen
 # (the page also carries hidden messages), for the log and the notification.
 _SHOWN_TEXT_JS = """
@@ -303,6 +313,17 @@ class Tab:
                 return False
             time.sleep(1)
 
+    def allow_cookies(self, wait: int = 0) -> None:
+        """Answer the cookie dialog, if the page is asking, with "allow all"."""
+        try:
+            if not self.evaluate(COOKIES_UNANSWERED_JS) or not self.wait_for(COOKIES_BUTTON_JS, wait):
+                return
+            self.evaluate(f"document.getElementById('{COOKIES_ALLOW_ALL_ID}').click()")
+            self.wait_for(f"!({COOKIES_BUTTON_JS})", 5)
+            log.info("Cookie dialog answered: all cookies allowed.")
+        except RuntimeError:
+            pass  # page is mid-navigation; the dialog comes back on the next page
+
     def type_into(self, element_id: str, text: str) -> bool:
         """Replace the content of a field, as typing does. True if it took it.
 
@@ -318,15 +339,19 @@ class Tab:
         return length == len(text)
 
     def click(self, element_id: str) -> None:
-        """Click an element with the mouse."""
+        """Click an element: with the mouse if it can be reached, else directly.
+
+        Something may lie on top of the element. The portal's cookie dialog
+        covers the login button in a browser that has never answered it.
+        """
         box = self.evaluate(
             f"(() => {{ const node = document.getElementById('{element_id}');"
             " node.scrollIntoView({block: 'center'});"
             " const box = node.getBoundingClientRect();"
-            " return {x: box.left + box.width / 2, y: box.top + box.height / 2,"
-            " shown: box.width > 0 && box.height > 0}; })()"
+            " const x = box.left + box.width / 2, y = box.top + box.height / 2;"
+            " return {x, y, reachable: node.contains(document.elementFromPoint(x, y))}; })()"
         )
-        if not box["shown"]:
+        if not box["reachable"]:
             self.evaluate(f"document.getElementById('{element_id}').click()")
             return
         for event in ("mousePressed", "mouseReleased"):
@@ -465,6 +490,7 @@ def attempt_login(tab: Tab) -> tuple:
     # The button does nothing until the captcha script has loaded.
     if not tab.wait_for(CAPTCHA_READY_JS, 30):
         return LOGIN_FAILED, "the captcha of the login form did not load"
+    tab.allow_cookies(wait=10)
 
     document_type = "NIE" if re.match(r"[XYZ]\d", LOGIN_DOCUMENT) else "NIF"
     tab.evaluate(
@@ -601,6 +627,7 @@ def run(browser: subprocess.Popen) -> None:
                 wait_for_login(tab, auto)
                 log.info("Login detected.")
 
+            tab.allow_cookies()
             cookie = tab.session_cookie()
             if cookie != saved_session():
                 save_session(cookie)
