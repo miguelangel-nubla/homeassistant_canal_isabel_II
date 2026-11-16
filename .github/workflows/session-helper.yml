@@ -1,14 +1,18 @@
 name: Session helper image
 
+# A release starts with the push of its tag (dev/release.sh). The release
+# itself, prepared as a draft, is only published once the image of that
+# version exists: nobody is offered an integration whose helper is not there
+# yet, and a build that fails publishes nothing.
 on:
   push:
     branches: ["**"]
+    # Path filters do not apply to tags: every v* tag runs this.
+    tags: ["v*"]
     paths:
       - "canal-session-helper/**"
       - "tests/helper/**"
       - ".github/workflows/session-helper.yml"
-  release:
-    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -44,7 +48,7 @@ jobs:
       # image whose tag equals its version, which has no leading "v".
       - id: version
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: echo "value=${TAG#v}" >> "$GITHUB_OUTPUT"
       # One description for the add-on store and for the image: the one in
       # the add-on's config.yaml.
@@ -68,9 +72,9 @@ jobs:
           # A release is tagged with its version: the Home Assistant add-on
           # pulls the image whose tag equals the add-on version.
           tags: |
-            type=raw,value=${{ steps.version.outputs.value }},enable=${{ github.event_name == 'release' }}
-            type=raw,value=latest,enable=${{ github.event_name != 'release' && github.ref == 'refs/heads/main' }}
-            type=raw,value=dev,enable=${{ github.event_name != 'release' && github.ref != 'refs/heads/main' }}
+            type=raw,value=${{ steps.version.outputs.value }},enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=dev,enable=${{ github.ref_type == 'branch' && github.ref != 'refs/heads/main' }}
             type=sha,format=short
       - uses: docker/build-push-action@v6
         with:
@@ -81,11 +85,44 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
 
+  release:
+    # The image exists: publish the release that was waiting for it.
+    needs: image
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      prerelease: ${{ steps.publish.outputs.prerelease }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - id: publish
+        run: |
+          if state=$(gh release view "$TAG" --json isDraft,isPrerelease --jq '[.isDraft, .isPrerelease] | @tsv'); then
+            draft=$(echo "$state" | cut -f1)
+            prerelease=$(echo "$state" | cut -f2)
+            if [ "$draft" = "true" ]; then
+              if [ "$prerelease" = "true" ]; then
+                gh release edit "$TAG" --draft=false
+              else
+                gh release edit "$TAG" --draft=false --latest
+              fi
+            fi
+          else
+            # A tag pushed without a draft: release it with generated notes.
+            gh release create "$TAG" --verify-tag --generate-notes
+            prerelease=false
+          fi
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
   addon-repository:
     # Tell the add-on repository that a new version exists. Needs the secret
     # DISPATCH_TOKEN (a token allowed to dispatch to that repository).
-    needs: image
-    if: github.event_name == 'release' && !github.event.release.prerelease
+    needs: release
+    if: needs.release.outputs.prerelease != 'true'
     runs-on: ubuntu-latest
     env:
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
