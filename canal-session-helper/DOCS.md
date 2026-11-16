@@ -48,6 +48,8 @@ En su pestaña **Registro** debe aparecer, en un minuto o dos, `Logged in.` y `S
 
 Su [interfaz web](https://my.home-assistant.io/redirect/supervisor_ingress/?addon=133adb15_canal-session-helper) (**Abrir interfaz web**, o **Mostrar en la barra lateral**) muestra el navegador, por si alguna vez tienes que iniciar sesión a mano.
 
+La aplicación se ejecuta con un perfil de AppArmor propio, que limita lo que el navegador puede hacer dentro de su contenedor: no puede montar nada, ni tocar los ajustes del núcleo, ni mirar otros procesos, y solo conserva los privilegios que necesita para arrancar.
+
 El acceso pasa por Home Assistant, que es quien identifica al usuario: no se publica ningún puerto y el ayudante solo acepta conexiones de Home Assistant. Cualquiera que pueda abrir la página de la aplicación puede usar el navegador, que tendrá tu sesión del Canal iniciada mientras dure.
 
 ## Como contenedor Docker
