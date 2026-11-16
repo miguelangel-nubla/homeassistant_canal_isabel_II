@@ -24,6 +24,7 @@ import os
 import re
 import ssl
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -66,6 +67,12 @@ REFUSED_DELAYS = (3600, 6 * 3600)
 # A login that could not be completed (the portal is down, the page did not
 # load, a captcha challenge nobody answered) is tried again, forever.
 FAILED_DELAYS = (300, 900, 1800, 3600)
+# The main loop notes here that it is alive (see watchdog and healthcheck.py).
+HEARTBEAT_FILE = "/tmp/helper.alive"
+# The longest the loop may go without a sign of life. One pass is at most a
+# few minutes: a slow question to Home Assistant and a login that times out.
+STALL_LIMIT = 900
+
 # While a login is not due, Home Assistant is reminded of why this often.
 # It forgets when it restarts.
 REPORT_INTERVAL = int(os.environ.get("REPORT_INTERVAL", "600"))
@@ -587,14 +594,44 @@ def serve(tab: Tab, request: dict, memory: dict) -> None:
     memory["reported"][entry_id] = time.monotonic()
 
 
+_alive_at = time.monotonic()
+
+
+def heartbeat() -> None:
+    """Note that the main loop is going round."""
+    global _alive_at
+    _alive_at = time.monotonic()
+    try:
+        with open(HEARTBEAT_FILE, "w", encoding="utf-8") as file:
+            file.write(str(int(time.time())))
+    except OSError:
+        pass
+
+
+def watchdog() -> None:
+    """End the process if the main loop stops, so the container is restarted.
+
+    A browser that hangs on a call can stop the loop without any error. A
+    helper that does nothing is worse than one that restarts.
+    """
+    while True:
+        time.sleep(60)
+        stalled = time.monotonic() - _alive_at
+        if stalled > STALL_LIMIT:
+            log.error("Nothing has happened for %d minutes. Stopping, to be started again.", stalled // 60)
+            os._exit(1)
+
+
 def run(browser: subprocess.Popen) -> None:
     tab = Tab()
     # Whose session the browser holds, and when each account's failure was last reported.
     memory = {"owner": None, "reported": {}}
     try:
         while browser.poll() is None:
+            heartbeat()
             for request in ask_for_work():
                 serve(tab, request, memory)
+                heartbeat()
             time.sleep(POLL_INTERVAL)
     finally:
         tab.close()
@@ -605,8 +642,11 @@ def main() -> None:
     if SUPERVISOR_TOKEN and not HELPER_URL:
         HELPER_URL = addon_ingress_url()
     log.info("Waiting for Home Assistant to want a portal session.")
+    heartbeat()
+    threading.Thread(target=watchdog, daemon=True).start()
     while True:
         browser = None
+        heartbeat()
         try:
             browser = start_browser()
             run(browser)

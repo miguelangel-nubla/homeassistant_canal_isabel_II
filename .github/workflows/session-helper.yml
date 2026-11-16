@@ -1,9 +1,16 @@
 name: Session helper image
 
-# A release starts with the push of its tag (dev/release.sh). The release
-# itself, prepared as a draft, is only published once the image of that
-# version exists: nobody is offered an integration whose helper is not there
-# yet, and a build that fails publishes nothing.
+# Three things start this workflow:
+#
+# - A push that touches the helper: test it and build the image (tag "latest"
+#   from main, "dev" from any other branch).
+# - The push of a release tag (dev/release.sh): test, build the image of that
+#   version, and only then publish the release, which was prepared as a
+#   draft, and tell the add-on repository. Nobody is offered an integration
+#   whose helper is not there yet, and a build that fails publishes nothing.
+# - The calendar, once a month: if Debian has a newer Chromium than the one
+#   in the last release, make a maintenance release with it. A browser that
+#   holds a logged-in session should not grow old.
 on:
   push:
     branches: ["**"]
@@ -13,33 +20,81 @@ on:
       - "canal-session-helper/**"
       - "tests/helper/**"
       - ".github/workflows/session-helper.yml"
+  schedule:
+    - cron: "23 4 3 * *"
   workflow_dispatch:
+    inputs:
+      maintenance:
+        description: Make a maintenance release if Chromium has been updated
+        type: boolean
+        default: false
 
 permissions:
   contents: read
-  packages: write
 
 # Two builds of the same ref would race for the same tags.
 concurrency:
   group: session-helper-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/canal-session-helper
+
 jobs:
+  plan:
+    # What is being built: the commit, and the release tag if there is one.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      sha: ${{ steps.plan.outputs.sha }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'main' || github.ref }}
+      - id: plan
+        env:
+          MAINTENANCE: ${{ github.event_name == 'schedule' || inputs.maintenance == true }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+          elif [ "$MAINTENANCE" = "true" ]; then
+            .github/maintenance-release.sh >> "$GITHUB_OUTPUT"
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   e2e:
     # The image's browser logs in to a fake portal (tests/helper).
+    needs: plan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
       - run: python3 tests/helper/e2e.py
 
   image:
-    needs: e2e
+    needs: [plan, e2e]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # To sign the statement of where the image was built.
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -48,7 +103,7 @@ jobs:
       # image whose tag equals its version, which has no leading "v".
       - id: version
         env:
-          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          TAG: ${{ needs.plan.outputs.tag }}
         run: echo "value=${TAG#v}" >> "$GITHUB_OUTPUT"
       # One description for the add-on store and for the image: the one in
       # the add-on's config.yaml.
@@ -57,26 +112,28 @@ jobs:
           echo "title=$(sed -n 's/^name: //p' canal-session-helper/config.yaml)" >> "$GITHUB_OUTPUT"
           echo "description=$(sed -n 's/^description: //p' canal-session-helper/config.yaml)" >> "$GITHUB_OUTPUT"
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
-          images: ghcr.io/${{ github.repository_owner }}/canal-session-helper
+          images: ${{ env.IMAGE }}
           labels: |
             org.opencontainers.image.title=${{ steps.about.outputs.title }}
             org.opencontainers.image.description=${{ steps.about.outputs.description }}
             org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/blob/main/canal-session-helper/DOCS.md
+            org.opencontainers.image.revision=${{ needs.plan.outputs.sha }}
           annotations: |
             org.opencontainers.image.title=${{ steps.about.outputs.title }}
             org.opencontainers.image.description=${{ steps.about.outputs.description }}
           # A release is tagged with its version: the Home Assistant add-on
           # pulls the image whose tag equals the add-on version.
           tags: |
-            type=raw,value=${{ steps.version.outputs.value }},enable=${{ github.ref_type == 'tag' }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=dev,enable=${{ github.ref_type == 'branch' && github.ref != 'refs/heads/main' }}
+            type=raw,value=${{ steps.version.outputs.value }},enable=${{ needs.plan.outputs.tag != '' }}
+            type=raw,value=latest,enable=${{ needs.plan.outputs.tag == '' && github.ref == 'refs/heads/main' }}
+            type=raw,value=dev,enable=${{ needs.plan.outputs.tag == '' && github.ref_type == 'branch' && github.ref != 'refs/heads/main' }}
             type=sha,format=short
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: canal-session-helper
           platforms: linux/amd64,linux/arm64
@@ -84,11 +141,22 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
+          # What went into the image, and how it was built, travel with it.
+          sbom: true
+          provenance: mode=max
+      # A signed statement that this image was built here, by this workflow,
+      # from this commit. Check it with:
+      #   gh attestation verify oci://ghcr.io/<owner>/canal-session-helper:<version> --repo <owner>/<repository>
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
   release:
     # The image exists: publish the release that was waiting for it.
-    needs: image
-    if: github.ref_type == 'tag'
+    needs: [plan, image]
+    if: needs.plan.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -97,7 +165,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ needs.plan.outputs.tag }}
     steps:
       - id: publish
         run: |

@@ -74,6 +74,16 @@ Solo las tres primeras son obligatorias. El perfil del navegador y la cuenta de 
 
 La imagen arranca como root únicamente para hacerse con `/data` y continúa como un usuario sin privilegios. También funciona con un usuario fijado (`user:`), con el sistema de ficheros en solo lectura y sin capacidades, si `/data` y `/tmp` son escribibles.
 
+### Actualizaciones y estado
+
+- **El navegador se mantiene al día.** Una vez al mes, si Debian ha publicado un Chromium más reciente, se publica una versión de mantenimiento del ayudante con él. Actualiza el ayudante cuando Home Assistant (o tu sistema de avisos de imágenes) te lo ofrezca: un navegador antiguo es menos seguro y le gusta menos al captcha.
+- **Estado del contenedor.** La imagen declara una comprobación de salud: `docker ps` muestra `healthy` mientras el ayudante sigue dando vueltas a su ciclo. Si el ciclo se queda parado más de 15 minutos, el ayudante termina por sí mismo para que el contenedor se reinicie (`restart: unless-stopped` en Docker; en Home Assistant, con la opción **Vigilancia** de la aplicación activada).
+- **Procedencia de la imagen.** Cada imagen lleva una declaración firmada de que la construyó el repositorio de este proyecto, y la lista de lo que contiene. Se comprueba con la [CLI de GitHub](https://cli.github.com/):
+
+  ```sh
+  gh attestation verify oci://ghcr.io/miguelangel-nubla/canal-session-helper:<versión> --repo miguelangel-nubla/homeassistant_canal_isabel_II
+  ```
+
 ### Seguridad
 
 - La vista remota muestra un navegador que tiene tu sesión del Canal iniciada mientras dura. No publiques el puerto 6080 fuera de tu red y usa una contraseña propia.

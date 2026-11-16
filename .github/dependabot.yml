@@ -1,0 +1,19 @@
+# Everything the builds depend on is pinned (actions by commit, the helper's
+# base image by digest). Dependabot proposes the newer ones.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /canal-session-helper
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly

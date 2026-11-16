@@ -88,6 +88,16 @@ The script prepares the release as a draft and pushes the tag. The workflow "Ses
 - A tag with a suffix (`v2026.11.10-rc.1`) makes a pre-release: its image is built and the release published as a pre-release, and the add-on repository is not told.
 - Do not publish the draft by hand: nothing would have checked that its image exists.
 
+### Maintenance releases
+
+On the 3rd of each month the same workflow compares the Chromium in the image of the last release with the one Debian has. If Debian's is newer, `.github/maintenance-release.sh` bumps the version on `main` (next patch of the month, or `YYYY.M.0`), prepares a draft release and pushes its tag, and the run goes on to build and publish it like any other release. Pull before working: `main` may have a version commit from `github-actions[bot]`. To run it by hand: the workflow's "Run workflow" button with "maintenance" ticked.
+
+### What the builds depend on
+
+- Actions are pinned by commit and the helper's base image by digest. Dependabot (`.github/dependabot.yml`) opens pull requests with the newer ones, weekly.
+- The image is pushed with its SBOM and build provenance, and a signed attestation that this repository's workflow built it (`gh attestation verify`, see the helper's guide).
+- The helper writes a heartbeat on every pass of its loop. `healthcheck.py` is the image's `HEALTHCHECK`, and the helper ends itself after 15 minutes without a pass.
+
 ## Marketplace listing
 
 The integration is installable today as a custom repository. Inclusion in the default Marketplace catalog was requested on 2026-11-16 in [hacs/default#14264](https://github.com/hacs/default/pull/14264); reviews there take months.

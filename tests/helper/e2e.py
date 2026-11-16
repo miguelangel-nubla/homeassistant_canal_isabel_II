@@ -52,6 +52,11 @@ class Helper:
     def logs(self) -> str:
         return docker("logs", self.id, check=False)
 
+    def healthy(self) -> bool:
+        """What the container's own health check says."""
+        result = subprocess.run(["docker", "exec", self.id, "python3", "/app/healthcheck.py"], capture_output=True)
+        return result.returncode == 0
+
     def stop(self) -> None:
         docker("rm", "-f", self.id, check=False)
 
@@ -78,6 +83,7 @@ def logs_in_only_when_a_session_is_wanted(start, state) -> None:
     helper = start()
     time.sleep(10)
     assert state.portal_hits == 0, "the portal was visited with nothing to do there"
+    assert helper.healthy(), "idle, the helper should report itself healthy"
 
     state.want("one", fake_portal.DOCUMENT.lower(), fake_portal.PASSWORD)
     first = wait_until("the session to reach Home Assistant", lambda: sessions(state))[0]
@@ -100,6 +106,7 @@ def logs_in_only_when_a_session_is_wanted(start, state) -> None:
     assert helper.logs().count("Cookie dialog answered") == 1, helper.logs()
     assert not reports(state), reports(state)
     assert fake_portal.PASSWORD not in helper.logs()
+    assert helper.healthy()
 
 
 def each_account_gets_its_own_session(start, state) -> None:
