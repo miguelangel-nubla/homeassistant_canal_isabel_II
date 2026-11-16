@@ -19,6 +19,11 @@ CONF_HISTORY_IMPORTED = "history_imported"
 HISTORY_DAYS = 365
 REFRESH_DAYS = 30
 
+# How often the data is fetched, and how soon again after a fetch that failed
+# for a reason other than the session.
+REFRESH_INTERVAL = timedelta(hours=12)
+RETRY_INTERVAL = timedelta(minutes=10)
+
 SERVICE_SET_SESSION = "set_session"
 
 SESSION_OK = "ok"

@@ -31,6 +31,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The add-on pulls the image whose tag equals its version, which never
+      # has a leading "v".
+      - id: version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: echo "value=${TAG#v}" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v5
         with:
@@ -38,7 +44,7 @@ jobs:
           # A release is tagged with its version: the Home Assistant add-on
           # pulls the image whose tag equals the add-on version.
           tags: |
-            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=${{ steps.version.outputs.value }},enable=${{ github.event_name == 'release' }}
             type=raw,value=latest,enable=${{ github.event_name != 'release' && github.ref == 'refs/heads/main' }}
             type=raw,value=dev,enable=${{ github.event_name != 'release' && github.ref != 'refs/heads/main' }}
             type=sha,format=short
@@ -67,10 +73,13 @@ jobs:
         if: ${{ !startsWith(github.event.release.tag_name, 'v') }}
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
-          gh api "repos/${{ github.repository }}/git/refs" \
-            -f ref="refs/tags/v${{ github.event.release.tag_name }}" \
-            -f sha="${{ github.sha }}" || true
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$TAG" >/dev/null 2>&1; then
+            echo "v$TAG already exists"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/v$TAG" -f sha="$GITHUB_SHA"
+          fi
       - if: env.DISPATCH_TOKEN != ''
         run: |
           curl -fsS -X POST \

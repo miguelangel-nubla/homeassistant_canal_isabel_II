@@ -9,6 +9,7 @@ The session cookie (JSESSIONID) is read from standard input, so it never
 shows up in the shell history or the process list.
 """
 import json
+import os
 import pathlib
 import sqlite3
 import sys
@@ -17,9 +18,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-URL = "http://127.0.0.1:18123"
 HERE = pathlib.Path(__file__).parent
-CONFIG = HERE / "config"
+# DEV_HA_URL / DEV_HA_STATE point the script at another instance, such as
+# the Home Assistant OS VM started by dev/haos.sh.
+URL = os.environ.get("DEV_HA_URL", "http://127.0.0.1:18123")
+CONFIG = pathlib.Path(os.environ.get("DEV_HA_STATE", HERE / "config"))
 TOKEN_FILE = CONFIG / ".dev_token"
 DOMAIN = "canal_de_isabel_ii"
 CONFIGURATION = """default_config:
@@ -119,6 +122,8 @@ def status():
         if state["entity_id"].startswith(f"sensor.{DOMAIN}"):
             unit = state["attributes"].get("unit_of_measurement", "")
             print("sensor:", state["entity_id"].rsplit("_", 1)[-1], state["state"], unit)
+    if not (CONFIG / "home-assistant_v2.db").exists():
+        return
     database = sqlite3.connect(f"file:{CONFIG / 'home-assistant_v2.db'}?mode=ro", uri=True)
     rows = database.execute(
         "select m.id, count(*), min(s.start_ts), max(s.start_ts), max(s.sum), "
@@ -136,7 +141,7 @@ def status():
 
 if __name__ == "__main__":
     CONFIG.mkdir(exist_ok=True)
-    if not (CONFIG / "configuration.yaml").exists():
+    if "DEV_HA_STATE" not in os.environ and not (CONFIG / "configuration.yaml").exists():
         (CONFIG / "configuration.yaml").write_text(CONFIGURATION)
     commands = {"setup": setup, "session": session, "status": status}
     if len(sys.argv) != 2 or sys.argv[1] not in commands:

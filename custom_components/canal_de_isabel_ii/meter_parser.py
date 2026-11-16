@@ -45,6 +45,9 @@ def parse_reading_m3(raw: str) -> Optional[float]:
     token = match.group(1)
     if "," in token:
         token = token.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"\d{1,3}(\.\d{3})+", token):
+        # No decimals and dots every three digits: thousands separators.
+        token = token.replace(".", "")
     try:
         return float(token)
     except ValueError:

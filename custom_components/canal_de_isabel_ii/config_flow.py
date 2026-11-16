@@ -12,7 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .api import CanalIsabelIIAPI
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_JSESSIONID, CONF_SESSION_SET_AT, DOMAIN
+from .const import CONF_JSESSIONID, CONF_SESSION_SET_AT, DOMAIN, SESSION_EXPIRED, SESSION_OK
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,12 +25,14 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> Dict[str, Any]:
     """Validate the user input allows us to connect."""
     api = CanalIsabelIIAPI(data[CONF_JSESSIONID])
-    
+
     # We run this in an executor because requests is blocking
-    result = await hass.async_add_executor_job(api.check_auth)
-    
-    if not result:
+    state, detail = await hass.async_add_executor_job(api.probe)
+    if state == SESSION_EXPIRED:
         raise InvalidAuth
+    if state != SESSION_OK:
+        _LOGGER.warning("Could not check the session with the portal: %s", detail)
+        raise CannotConnect
 
     return {"title": "Canal de Isabel II"}
 
@@ -46,10 +48,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors: Dict[str, str] = {}
         if user_input is not None:
+            self._async_abort_entries_match({CONF_JSESSIONID: user_input[CONF_JSESSIONID]})
             try:
                 info = await validate_input(self.hass, user_input)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -82,7 +87,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Update the existing entry
                 self.hass.config_entries.async_update_entry(
                     self.entry,
-                    data={**user_input, CONF_SESSION_SET_AT: dt_util.utcnow().isoformat()},
+                    data={
+                        **self.entry.data,
+                        **user_input,
+                        CONF_SESSION_SET_AT: dt_util.utcnow().isoformat(),
+                    },
                 )
                 
                 # Reload the entry to apply changes
@@ -91,6 +100,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="reauth_successful")
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -105,3 +116,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class InvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""
+
+
+class CannotConnect(HomeAssistantError):
+    """Error to indicate the portal could not be reached or answered oddly."""

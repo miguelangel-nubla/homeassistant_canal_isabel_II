@@ -18,10 +18,12 @@
     },
     "error": {
       "invalid_auth": "El portal no ha aceptado esta sesión. Comprueba el valor de la cookie y que sigues con la sesión iniciada.",
-      "unknown": "Error inesperado. Revisa los registros."
+      "unknown": "Error inesperado. Revisa los registros.",
+      "cannot_connect": "No se pudo contactar con el portal o respondió de forma inesperada. Inténtalo más tarde."
     },
     "abort": {
-      "reauth_successful": "Sesión actualizada."
+      "reauth_successful": "Sesión actualizada.",
+      "already_configured": "Esta sesión ya está configurada."
     }
   },
   "services": {

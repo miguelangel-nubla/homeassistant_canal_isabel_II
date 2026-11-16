@@ -12,6 +12,8 @@ Componente para integrar los datos de consumo de agua del Canal de Isabel II en 
 
 ### HACS (Recomendado)
 
+[![Abrir el repositorio en HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=miguelangel-nubla&repository=homeassistant_canal_isabel_II&category=integration)
+
 1.  Asegúrate de tener [HACS](https://hacs.xyz/) instalado.
 2.  Ve a **HACS > Integraciones**.
 3.  Haz clic en los tres puntos de arriba a la derecha y elige **Repositorios personalizados**.
@@ -56,6 +58,11 @@ Para añadirlo al panel de Energía: **Ajustes > Paneles > Energía > Consumo de
 Cada importación continúa la serie guardada, así que volver a descargar las mismas horas no duplica ni descuadra nada.
 
 La primera descarga pide el último año completo de consumo horario; las siguientes, los últimos 30 días, de modo que las horas publicadas con retraso o una temporada sin sesión se rellenan solas.
+
+Limitaciones conocidas:
+
+- Si la cuenta tiene varios contratos, solo se lee el que el portal muestra seleccionado.
+- La noche del cambio de hora de otoño el portal publica una sola fila para las dos horas que se llaman 02:00. En Home Assistant esa fila queda en una hora y la siguiente aparece vacía.
 
 > [!IMPORTANT]
 > **Si actualizas desde una versión anterior:** el histórico ya no se guarda en el sensor `Canal de Isabel II Total`, que se elimina. Tienes que volver a elegir la fuente de agua en el panel de Energía. Las estadísticas antiguas de ese sensor se pueden borrar desde **Herramientas para desarrolladores > Estadísticas**.

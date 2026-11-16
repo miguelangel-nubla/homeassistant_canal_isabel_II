@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfVolume
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -61,27 +61,42 @@ async def async_setup_entry(
 ) -> None:
     """Set up the sensor platform."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    data: Optional[PortalData] = coordinator.data
-
-    contracts = sorted({reading.contract for reading in data.readings}) if data else []
-    if not contracts:
-        _LOGGER.warning("No readings received from Canal de Isabel II, cannot create sensors yet.")
-        return
-
     registry = er.async_get(hass)
-    entities: List[SensorEntity] = []
-    for contract_id in contracts:
-        # The old "Total" entity only existed to carry statistics, which now
-        # live in the external statistic.
-        old_total = registry.async_get_entity_id("sensor", DOMAIN, f"canal_ii_total_{contract_id}")
-        if old_total:
-            registry.async_remove(old_total)
+    with_consumption: set = set()
+    with_meter: set = set()
 
-        entities.append(CanalIsabelIIConsumptionSensor(coordinator, contract_id))
-        if _meter_for(data, contract_id) is not None:
-            entities.append(CanalIsabelIIMeterReadingSensor(coordinator, contract_id))
+    @callback
+    def add_new_entities() -> None:
+        """Create the sensors of contracts (and meter readings) not seen before.
 
-    async_add_entities(entities)
+        Runs on every update, so sensors also appear when the first fetch
+        had no data.
+        """
+        data: Optional[PortalData] = coordinator.data
+        if data is None:
+            return
+        entities: List[SensorEntity] = []
+        for contract_id in sorted({reading.contract for reading in data.readings}):
+            if contract_id not in with_consumption:
+                with_consumption.add(contract_id)
+                # The old "Total" entity only existed to carry statistics,
+                # which now live in the external statistic.
+                old_total = registry.async_get_entity_id(
+                    "sensor", DOMAIN, f"canal_ii_total_{contract_id}"
+                )
+                if old_total:
+                    registry.async_remove(old_total)
+                entities.append(CanalIsabelIIConsumptionSensor(coordinator, contract_id))
+            if contract_id not in with_meter and _meter_for(data, contract_id) is not None:
+                with_meter.add(contract_id)
+                entities.append(CanalIsabelIIMeterReadingSensor(coordinator, contract_id))
+        if entities:
+            async_add_entities(entities)
+
+    add_new_entities()
+    if not with_consumption:
+        _LOGGER.warning("No readings received from Canal de Isabel II yet; the sensors appear when there are.")
+    entry.async_on_unload(coordinator.async_add_listener(add_new_entities))
 
 
 class _ContractSensor(CoordinatorEntity, SensorEntity):

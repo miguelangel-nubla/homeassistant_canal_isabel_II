@@ -1,13 +1,16 @@
 """The Canal de Isabel II integration."""
 import logging
-from datetime import timedelta
 from homeassistant.helpers.event import async_track_time_interval
 
 import voluptuous as vol
 
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceValidationError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryNotReady,
+    ServiceValidationError,
+)
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
@@ -23,6 +26,8 @@ from .const import (
     HISTORY_DAYS,
     KEEP_ALIVE_INTERVAL,
     REFRESH_DAYS,
+    REFRESH_INTERVAL,
+    RETRY_INTERVAL,
     SERVICE_SET_SESSION,
     SESSION_EXPIRED,
     SESSION_OK,
@@ -63,9 +68,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         jsessionid = call.data[CONF_JSESSIONID]
 
         if jsessionid != entry.data.get(CONF_JSESSIONID):
-            valid = await hass.async_add_executor_job(CanalIsabelIIAPI(jsessionid).check_auth)
-            if not valid:
+            state, detail = await hass.async_add_executor_job(CanalIsabelIIAPI(jsessionid).probe)
+            if state == SESSION_EXPIRED:
                 raise ServiceValidationError("The portal did not accept this session")
+            if state != SESSION_OK:
+                raise ServiceValidationError(f"The session could not be checked with the portal: {detail}")
             hass.config_entries.async_update_entry(
                 entry,
                 data={
@@ -120,7 +127,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await tracker.async_record_failure(str(err))
             raise ConfigEntryAuthFailed(err) from err
         except Exception as err:
+            coordinator.update_interval = RETRY_INTERVAL
             raise UpdateFailed(f"Error communicating with API: {err}")
+        coordinator.update_interval = REFRESH_INTERVAL
         tracker.record_ok()
 
         imported = True
@@ -130,7 +139,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except Exception:  # pylint: disable=broad-except
                 imported = False
                 _LOGGER.exception("Could not import statistics for contract %s", contract)
-        if first_import and imported and data.readings:
+        if first_import and imported and data.readings and data.range_applied:
             hass.config_entries.async_update_entry(
                 entry, data={**entry.data, CONF_HISTORY_IMPORTED: True}
             )
@@ -139,12 +148,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = DataUpdateCoordinator(
         hass,
         _LOGGER,
+        config_entry=entry,
         name=DOMAIN,
         update_method=async_update_data,
-        update_interval=timedelta(hours=12),
+        update_interval=REFRESH_INTERVAL,
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryNotReady as err:
+        # The portal is down or the page could not be read. Carry on: the
+        # session still gets its keep-alive and the fetch is tried again
+        # later, instead of Home Assistant retrying the whole setup every
+        # minute or so against the portal.
+        _LOGGER.warning(
+            "No data from the portal yet, trying again in %s minutes: %s",
+            int(RETRY_INTERVAL.total_seconds() // 60),
+            err,
+        )
+    # Keeps the periodic fetch (and with it the statistics import) running
+    # even when there are no entities listening, or all are disabled.
+    entry.async_on_unload(coordinator.async_add_listener(lambda: None))
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
@@ -182,6 +206,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data = hass.data[DOMAIN].pop(entry.entry_id)
         if data["remove_keep_alive"]:
             data["remove_keep_alive"]()
+        await data["tracker"].async_close()
 
     return unload_ok
 
