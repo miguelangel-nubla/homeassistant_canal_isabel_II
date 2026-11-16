@@ -528,6 +528,8 @@ def deliver(tab: Tab, request: dict, auto: AutoLogin) -> None:
     auto.reset()  # logged in: the refusals are history
     if send_session(request["entry_id"], tab.session_cookie()):
         log.info("Session handed to Home Assistant.")
+        # Leave the portal: an open page of it could keep talking to it.
+        tab.open("about:blank")
 
 
 def serve(tab: Tab, request: dict, memory: dict) -> None:
