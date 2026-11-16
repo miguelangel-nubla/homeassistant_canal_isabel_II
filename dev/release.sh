@@ -29,7 +29,9 @@ esac
 
 # shellcheck disable=SC2086
 gh release create "$TAG" --draft $PRERELEASE --target main --title "$TAG" --notes-file "$NOTES" >/dev/null
-git tag "$TAG" origin/main
-git push -q origin "$TAG"
+# Pushed straight from the commit, without a local tag: a git set up to sign
+# or annotate tags would ask for a message or a key.
+git push -q origin "$(git rev-parse origin/main):refs/tags/$TAG"
+git fetch -q origin "refs/tags/$TAG:refs/tags/$TAG"
 echo "Draft of $TAG created and tag pushed. It is published when its image is built:"
 echo "  gh run watch \$(gh run list --workflow session-helper.yml --branch $TAG --limit 1 --json databaseId --jq '.[0].databaseId')"
