@@ -47,8 +47,8 @@ La integración se instala desde el **Marketplace** de Home Assistant (**Ajustes
 
 [![Abrir el repositorio en el Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=miguelangel-nubla&repository=homeassistant_canal_isabel_II&category=integration)
 
-1. Pulsa el botón y acepta añadir el repositorio. Si prefieres hacerlo a mano: abre el Marketplace, elige **Repositorios personalizados** en el menú de los tres puntos y añade `https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II` con la categoría **Integración**.
-2. Descarga **Canal de Isabel II**.
+1. Pulsa el botón, o abre el Marketplace y busca **Canal de Isabel II**.
+2. Descárgala.
 3. Reinicia Home Assistant.
 
 Hace falta Home Assistant 2026.11 o posterior.

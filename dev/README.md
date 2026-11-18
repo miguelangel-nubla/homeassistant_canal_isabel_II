@@ -101,12 +101,11 @@ On the 3rd of each month the same workflow compares the Chromium in the image of
 
 ## Marketplace listing
 
-The integration is installable today as a custom repository. Inclusion in the default Marketplace catalog was requested on 2026-11-16 in [hacs/default#14264](https://github.com/hacs/default/pull/14264); reviews there take months.
+The integration is in the default Marketplace catalog since 2026-11-17 ([hacs/default#14264](https://github.com/hacs/default/pull/14264)), so users find it by searching, without adding a custom repository.
 
-While that pull request is open, and afterwards to stay listed:
+To stay listed:
 
 - `Marketplace validation` (`.github/workflows/validate.yaml`) and hassfest must keep passing, without ignored checks.
 - `hacs.json` needs at least `name`, and `manifest.json` needs `documentation`, `issue_tracker`, `codeowners` and a `version` that matches the release.
 - The brand images live in `custom_components/canal_de_isabel_ii/brand/`. They are rendered from the vector files in `dev/brand/` with `dev/brand/render.sh` (needs `rsvg-convert`): the icon is the symbol alone, everything has a transparent background, and `dark_logo` has white lettering for dark themes. The same script renders the images of the session helper.
 - The repository keeps its description, topics and issues enabled, and publishes full releases, not just tags.
-- Do not request reviews on the catalog pull request. Changes to it are pushed to the branch `add-canal-de-isabel-ii` of the fork `miguelangel-nubla/default`.
