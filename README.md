@@ -112,7 +112,7 @@ Para darle las mejores opciones de que funcione sin que tengas que intervenir:
 - **Si la contraseña es incorrecta, corrígela en cuanto te lo pida.** El ayudante deja de insistir tras tres rechazos para que no se bloquee la cuenta, pero los rechazos también cuentan en tu contra.
 - **Si te pide pruebas a menudo**, entra a mano en el navegador del ayudante un par de veces: un navegador con historial de entradas resueltas por una persona suele recibir menos pruebas.
 
-Nada de esto es una garantía. La integración depende de una página web que no está pensada para esto; si conoces una vía oficial para obtener los datos, [abre una issue](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues).
+Nada de esto es una garantía. La integración depende de una página web que no está pensada para esto; si conoces una vía oficial para obtener los datos, [abre una incidencia en GitHub](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues).
 
 ## Panel de Energía
 
@@ -131,7 +131,7 @@ Cada importación continúa la serie guardada, así que volver a descargar las m
 
 ## Limitaciones conocidas
 
-- Si la cuenta tiene varios contratos se leen todos, cada uno con su dispositivo, hasta un máximo de 20. No se ha podido probar con una cuenta real de varios contratos: si tienes una y algo no cuadra, [abre una issue](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues).
+- Si la cuenta tiene varios contratos se leen todos, cada uno con su dispositivo, hasta un máximo de 20. No se ha podido probar con una cuenta real de varios contratos: si tienes una y algo no cuadra, [abre una incidencia en GitHub](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues).
 - La noche del cambio de hora de otoño el portal publica una sola fila para las dos horas que se llaman 02:00. En Home Assistant esa fila queda en una hora y la siguiente aparece vacía.
 
 ## Referencia
@@ -154,4 +154,4 @@ La integración no llama al ayudante: es el ayudante quien llama a estos servici
 
 Las pruebas, la instancia local de Home Assistant y la máquina virtual para probar el ayudante como aplicación están descritas en [`dev/README.md`](dev/README.md).
 
-Si conoces una API oficial o una forma mejor de obtener los datos, abre una [issue](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues).
+Si conoces una API oficial o una forma mejor de obtener los datos, abre una [incidencia en GitHub](https://github.com/miguelangel-nubla/homeassistant_canal_isabel_II/issues).
